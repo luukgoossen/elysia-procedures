@@ -1,0 +1,19 @@
+{
+  "name": "elysia-procedures",
+  "module": "./src/index.ts",
+  "type": "module",
+  "author": "Luuk Goossen",
+  "license": "MIT",
+  "version": "0.0.1",
+  "description": "tRPC style procedures for Elysia",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/luukgoossen/elysia-procedures.git"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  }
+}
