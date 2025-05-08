@@ -101,9 +101,7 @@ const getUserAction = userProcedure.createAction('Get User')
 
 // Use with Elysia
 const app = new Elysia()
-  .get('/users/:userId', ({ request, params, query }) => {
-    return getUserAction.handle({ request, params, query, body: undefined });
-  }, getUserAction.docs)
+  .get('/users/:userId', getUserAction.handle, {...getUserAction.docs, tags: ['Users']})
   .listen(3000);
 
 console.log('Server running on http://localhost:3000');
