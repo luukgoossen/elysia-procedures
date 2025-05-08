@@ -81,13 +81,13 @@ class Middleware<
 	Body extends TObject | undefined,
 	Next = object | void
 > {
-	private _fn: ProcedureFn<Ctx, Params, Query, Body, Next>
+	private _handler: ProcedureFn<Ctx, Params, Query, Body, Next>
 
 	/** Name of the middleware for identification */
 	name: string
 
-	constructor(fn: ProcedureFn<Ctx, Params, Query, Body, Next>, name: string) {
-		this._fn = fn
+	constructor(handler: ProcedureFn<Ctx, Params, Query, Body, Next>, name: string) {
+		this._handler = handler
 		this.name = name
 	}
 
@@ -97,7 +97,7 @@ class Middleware<
 	 * @returns - The additional context created by the middleware to be merged into the procedure
 	 */
 	public execute = async (input: ProcedureFnArgs<Ctx, Params, Query, Body>) => {
-		return await this._fn(input)
+		return await this._handler(input)
 	}
 }
 
