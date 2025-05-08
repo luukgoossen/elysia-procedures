@@ -181,39 +181,6 @@ const app = new Elysia()
   .listen(3000);
 ```
 
-## API Reference
-
-### `createProcedure(name: string, base?: Procedure)`
-
-Creates a new procedure builder.
-
-- `name`: A descriptive name for the procedure (used in logs and debugging)
-- `base`: Optional base procedure to inherit from
-
-### `ProcedureBuilder`
-
-Methods:
-- `.params(schema)`: Add route parameter validation
-- `.query(schema)`: Add query string validation
-- `.body(schema)`: Add request body validation
-- `.build(handler)`: Build the procedure with a handler function
-
-### `ActionBuilder`
-
-Methods:
-- `.params(schema)`: Add or override route parameter validation
-- `.query(schema)`: Add or override query string validation
-- `.body(schema)`: Add or override request body validation
-- `.output(schema)`: Define response schema
-- `.build(handler)`: Build the action with a handler function
-
-### `Action`
-
-Properties:
-- `.docs`: API documentation in Elysia format
-- `.handle(context)`: Handler function for use with Elysia
-- `.run(request, input)`: General handler for the action
-
 ## Acknowledgments
 
 - [Elysia](https://elysiajs.com/) - The fast, and friendly Bun web framework
