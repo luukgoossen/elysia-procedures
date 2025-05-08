@@ -11,7 +11,8 @@
     "url": "https://github.com/luukgoossen/elysia-procedures.git"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "type-fest": "^4.41.0"
   },
   "peerDependencies": {
     "typescript": "^5",

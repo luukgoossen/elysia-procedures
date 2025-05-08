@@ -1,62 +1,61 @@
 // import dependencies
-import { Type } from '@sinclair/typebox'
 import { ActionBuilder } from './action'
+import { merge } from './utils'
 
 // import types
-import type { TSchema, Static, TObject } from '@sinclair/typebox'
-import type { MergeSchema, MergeObject } from './utils'
+import type { Static, TObject } from '@sinclair/typebox'
+import type { Merge } from 'type-fest'
+import type { ActionDetails } from './action'
 
 /**
  * Configuration arguments for creating a procedure
  */
 export type ProcedureArgs<
-	Params extends TSchema | undefined,
-	Query extends TSchema | undefined,
-	Body extends TSchema | undefined,
+	Params extends TObject | undefined = undefined,
+	Query extends TObject | undefined = undefined,
+	Body extends TObject | undefined = undefined
 > = {
 	/** Schema for route parameters */
-	params?: Params
+	params: Params
 	/** Schema for query parameters */
-	query?: Query
+	query: Query
 	/** Schema for request body */
-	body?: Body
+	body: Body
 	/** Chain of middleware to execute before the main action handler */
 	middlewares: AnyMiddleware[]
 	/** Name of the procedure for identification */
 	name: string
-	/** Optional description of what the procedure does for logging purposes */
-	role?: string
 }
 
 /**
  * Arguments passed to procedure handler functions
  */
 export type ProcedureFnArgs<
-	Params extends TSchema | undefined,
-	Query extends TSchema | undefined,
-	Body extends TSchema | undefined,
-	Ctx extends Context
+	Ctx extends Context,
+	Params extends TObject | undefined = undefined,
+	Query extends TObject | undefined = undefined,
+	Body extends TObject | undefined = undefined
 > = {
-	/** Parsed and validated route parameters */
-	params: Params extends TSchema ? Static<Params> : undefined
-	/** Parsed and validated query parameters */
-	query: Query extends TSchema ? Static<Query> : undefined
-	/** Parsed and validated request body */
-	body: Body extends TSchema ? Static<Body> : undefined
 	/** Context object with request data and middleware results */
 	ctx: Ctx
+	/** Parsed and validated route parameters */
+	params: Params extends TObject ? Static<Params> : undefined
+	/** Parsed and validated query parameters */
+	query: Query extends TObject ? Static<Query> : undefined
+	/** Parsed and validated request body */
+	body: Body extends TObject ? Static<Body> : undefined
 }
 
 /**
  * Function type for procedure middleware functions
  */
 export type ProcedureFn<
-	Params extends TSchema | undefined,
-	Query extends TSchema | undefined,
-	Body extends TSchema | undefined,
 	Ctx extends Context,
+	Params extends TObject | undefined = undefined,
+	Query extends TObject | undefined = undefined,
+	Body extends TObject | undefined = undefined,
 	Next = object | void
-> = (input: ProcedureFnArgs<Params, Query, Body, Ctx>) => Promise<Next> | Next
+> = (input: ProcedureFnArgs<Ctx, Params, Query, Body>) => Promise<Next> | Next
 
 /**
  * Type alias for any middleware type
@@ -76,23 +75,20 @@ export type Context = {
  * A middleware processes requests before they reach the main action handler.
  */
 class Middleware<
-	Params extends TSchema | undefined,
-	Query extends TSchema | undefined,
-	Body extends TSchema | undefined,
 	Ctx extends Context,
+	Params extends TObject | undefined = undefined,
+	Query extends TObject | undefined = undefined,
+	Body extends TObject | undefined = undefined,
 	Next = object | void
 > {
 	/** The middleware function to execute */
-	fn: ProcedureFn<Params, Query, Body, Ctx, Next>
+	fn: ProcedureFn<Ctx, Params, Query, Body, Next>
 	/** Name of the middleware for identification */
 	name: string
-	/** Optional description of what the middleware does for logging purposes */
-	role?: string
 
-	constructor(fn: ProcedureFn<Params, Query, Body, Ctx, Next>, name: string, role?: string) {
+	constructor(fn: ProcedureFn<Ctx, Params, Query, Body, Next>, name: string) {
 		this.fn = fn
 		this.name = name
-		this.role = role
 	}
 }
 
@@ -103,10 +99,10 @@ class Middleware<
  * or used to create actions directly.
  */
 class Procedure<
-	Params extends TSchema | undefined,
-	Query extends TSchema | undefined,
-	Body extends TSchema | undefined,
-	Ctx extends Context
+	Ctx extends Context,
+	Params extends TObject | undefined = undefined,
+	Query extends TObject | undefined = undefined,
+	Body extends TObject | undefined = undefined
 > {
 	/** TypeBox schema for route parameters */
 	params: Params
@@ -118,20 +114,19 @@ class Procedure<
 	middlewares: AnyMiddleware[]
 
 	constructor(base: ProcedureArgs<Params, Query, Body>) {
-		this.params = base.params as Params
-		this.query = base.query as Query
-		this.body = base.body as Body
+		this.params = base.params
+		this.query = base.query
+		this.body = base.body
 		this.middlewares = base.middlewares
 	}
 
 	/**
 	 * Creates a new action from this procedure
 	 * @param name - The name of the action
-	 * @param options - Optional configuration options
-	 * @param options.description - Optional description of what the action does for API documentation
+	 * @param details - API documentation details for the action
 	 * @returns A new ActionBuilder instance
 	 */
-	public createAction(name: string, options?: { description?: string }) {
+	public createAction(name: string, details?: ActionDetails) {
 		return new ActionBuilder<Params, Query, Body, undefined, Ctx>({
 			params: this.params,
 			query: this.query,
@@ -139,7 +134,7 @@ class Procedure<
 			output: undefined,
 			middlewares: this.middlewares,
 			name,
-			description: options?.description,
+			details,
 		})
 	}
 }
@@ -149,15 +144,15 @@ class Procedure<
  * Enables chaining methods to require parameters, query, body, and handlers.
  */
 class ProcedureBuilder<
-	Params extends TSchema | undefined,
-	Query extends TSchema | undefined,
-	Body extends TSchema | undefined,
-	Ctx extends Context
+	Ctx extends Context = Context,
+	Params extends TObject | undefined = undefined,
+	Query extends TObject | undefined = undefined,
+	Body extends TObject | undefined = undefined
 > {
-	private _properties: ProcedureArgs<Params, Query, Body>
+	private _state: ProcedureArgs<Params, Query, Body>
 
 	constructor(base: ProcedureArgs<Params, Query, Body>) {
-		this._properties = base
+		this._state = base
 	}
 
 	/**
@@ -166,41 +161,22 @@ class ProcedureBuilder<
 	 * @returns A new ProcedureBuilder with updated configuration
 	 * @private
 	 */
-	private _apply<
-		P extends TSchema | undefined,
-		Q extends TSchema | undefined,
-		B extends TSchema | undefined
-	>(
+	private _apply = <P extends TObject | undefined, Q extends TObject | undefined, B extends TObject | undefined>(
 		changes: Partial<ProcedureArgs<P, Q, B>>
-	): ProcedureBuilder<P, Q, B, Ctx> {
-		return new ProcedureBuilder<P, Q, B, Ctx>({
-			...this._properties,
+	): ProcedureBuilder<Ctx, P, Q, B> => {
+		return new ProcedureBuilder<Ctx, P, Q, B>({
+			...this._state,
 			...changes
 		} as ProcedureArgs<P, Q, B>)
-	}
-
-	/**
-	 * Merges two TypeBox schemas together
-	 * @param prev - Previous schema (if any)
-	 * @param next - New schema to merge
-	 * @returns Merged schema
-	 * @private
-	 */
-	private _merge<Prev extends TSchema | undefined, Next extends TObject>(
-		prev: Prev,
-		next: Next
-	) {
-		if (!prev) return next
-		return Type.Intersect([prev, next])
 	}
 
 	/**
 	 * Adds or merges route parameter definitions to the procedure
 	 * @param params - The TypeBox schema defining the route parameters
 	 */
-	public params<T extends TObject>(params: T) {
-		const mergedParams = this._merge(this._properties.params, params) as MergeSchema<Params, T>
-		return this._apply<MergeSchema<Params, T>, Query, Body>({
+	public params = <T extends TObject>(params: T) => {
+		const mergedParams = merge(this._state.params, params)
+		return this._apply({
 			params: mergedParams
 		})
 	}
@@ -210,8 +186,8 @@ class ProcedureBuilder<
 	 * @param query - The TypeBox schema defining the query parameters
 	 */
 	public query<T extends TObject>(query: T) {
-		const mergedQuery = this._merge(this._properties.query, query) as MergeSchema<Query, T>
-		return this._apply<Params, MergeSchema<Query, T>, Body>({
+		const mergedQuery = merge(this._state.query, query)
+		return this._apply({
 			query: mergedQuery
 		})
 	}
@@ -221,8 +197,8 @@ class ProcedureBuilder<
 	 * @param body - The TypeBox schema defining the request body
 	 */
 	public body<T extends TObject>(body: T) {
-		const mergedBody = this._merge(this._properties.body, body) as MergeSchema<Body, T>
-		return this._apply<Params, Query, MergeSchema<Body, T>>({
+		const mergedBody = merge(this._state.body, body)
+		return this._apply({
 			body: mergedBody
 		})
 	}
@@ -232,11 +208,11 @@ class ProcedureBuilder<
 	 * @param fn - The function to execute when this procedure is called
 	 * @returns A built procedure with the given handler
 	 */
-	public handler<Next extends Object | void>(fn: ProcedureFn<Params, Query, Body, Ctx, Next>) {
-		const middleware = new Middleware<Params, Query, Body, Ctx, Next>(fn, this._properties.name, this._properties.role)
-		this._properties.middlewares = [...this._properties.middlewares, middleware]
+	public handler<Next extends Object | void>(fn: ProcedureFn<Ctx, Params, Query, Body, Next>) {
+		const middleware = new Middleware<Ctx, Params, Query, Body, Next>(fn, this._state.name)
+		this._state.middlewares = [...this._state.middlewares, middleware]
 
-		return new Procedure<Params, Query, Body, Context & MergeObject<Ctx, Next>>(this._properties)
+		return new Procedure<Context & Merge<Ctx, Next>, Params, Query, Body>(this._state)
 	}
 }
 
@@ -262,15 +238,14 @@ class ProcedureBuilder<
  * ```
  */
 export const createProcedure = <
-	Params extends TSchema | undefined,
-	Query extends TSchema | undefined,
-	Body extends TSchema | undefined,
-	Ctx extends Context
->(name: string, base?: Procedure<Params, Query, Body, Ctx>, role?: string) => new ProcedureBuilder<Params, Query, Body, Ctx>({
-	params: base?.params ?? undefined,
-	query: base?.query ?? undefined,
-	body: base?.body ?? undefined,
+	Ctx extends Context,
+	Params extends TObject | undefined = undefined,
+	Query extends TObject | undefined = undefined,
+	Body extends TObject | undefined = undefined
+>(name: string, base?: Procedure<Ctx, Params, Query, Body>) => new ProcedureBuilder<Ctx, Params, Query, Body>({
+	params: base?.params as any,
+	query: base?.query as any,
+	body: base?.body as any,
 	middlewares: base?.middlewares ?? [],
 	name,
-	role,
 })

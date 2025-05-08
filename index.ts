@@ -16,12 +16,13 @@ const baseProcedure = createProcedure('Base Route Handler')
 	})
 
 const authProcedure = createProcedure('User Authentication', baseProcedure)
-	.query(Type.Object({
+	.params(Type.Object({
 		token: Type.String({ description: "some token" })
 	}))
 	.handler(({ ctx, params, query }) => {
-		console.log('token: ', query.token)
+		console.log('token: ', params.token)
 		console.log('params: ', params.name)
+		console.log('user: ', ctx.user)
 
 		return {
 			user: 12

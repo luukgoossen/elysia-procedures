@@ -9,19 +9,23 @@ import type { Context, ProcedureFnArgs, AnyMiddleware } from './procedure'
 import type { MergeSchema } from './utils'
 
 // define types
+export type ActionDetails = Partial<{
+	description: string
+}>
+
 export type ActionBuilderInput<
-	Params extends TSchema | undefined,
-	Query extends TSchema | undefined,
-	Body extends TSchema | undefined,
-	Output extends TSchema | undefined,
+	Params extends TObject | undefined = undefined,
+	Query extends TObject | undefined = undefined,
+	Body extends TObject | undefined = undefined,
+	Output extends TSchema | undefined = undefined
 > = {
-	params?: Params
-	query?: Query
-	body?: Body
-	output?: Output
+	params: Params
+	query: Query
+	body: Body
+	output: Output
 	middlewares: AnyMiddleware[]
 	name: string
-	description?: string
+	details?: ActionDetails
 }
 
 export type ActionInput<
