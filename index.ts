@@ -5,7 +5,7 @@ import { Elysia } from 'elysia'
 import { swagger } from '@elysiajs/swagger'
 
 // example usage
-const baseProcedure = createProcedure()
+const baseProcedure = createProcedure('Base Route Handler')
 	.params(Type.Object({
 		name: Type.String({ description: "some name" })
 	}))
@@ -15,7 +15,7 @@ const baseProcedure = createProcedure()
 		}
 	})
 
-const authProcedure = createProcedure(baseProcedure)
+const authProcedure = createProcedure('User Authentication', baseProcedure)
 	.query(Type.Object({
 		token: Type.String({ description: "some token" })
 	}))

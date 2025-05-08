@@ -5,7 +5,7 @@ import { Value } from '@sinclair/typebox/value'
 // import types
 import type { TSchema, TObject, Static } from '@sinclair/typebox'
 import type { Context as ElysiaContext } from 'elysia'
-import type { Context, ProcedureFnArgs, AnyProcedureFn } from './procedure'
+import type { Context, ProcedureFnArgs, AnyMiddleware } from './procedure'
 import type { MergeSchema } from './utils'
 
 // define types
@@ -19,7 +19,7 @@ export type ActionBuilderInput<
 	query?: Query
 	body?: Body
 	output?: Output
-	middlewares: AnyProcedureFn[]
+	middlewares: AnyMiddleware[]
 	name: string
 	description?: string
 }
@@ -50,7 +50,7 @@ export class Action<
 	Ctx extends Context
 > {
 	private _fn: ActionFn<Params, Query, Body, Output, Ctx>
-	private _middlewares: AnyProcedureFn[]
+	private _middlewares: AnyMiddleware[]
 
 	title: string
 	description?: string
@@ -143,8 +143,11 @@ export class Action<
 
 		// run the middlewares
 		for (const middleware of this._middlewares) {
-			const out = await middleware({ params, query, body, ctx })
+			console.log(`Middleware: ${middleware.name}`)
+			console.profile(`Middleware: ${middleware.name}`)
+			const out = await middleware.fn({ params, query, body, ctx })
 			if (out) ctx = { ...ctx, ...out }
+			console.profileEnd(`Middleware: ${middleware.name}`)
 		}
 
 		// run the action
@@ -168,7 +171,7 @@ export class ActionBuilder<
 	private _query: Query
 	private _body: Body
 	private _output: Output
-	private _middlewares: AnyProcedureFn[]
+	private _middlewares: AnyMiddleware[]
 	private _name: string
 	private _description?: string
 
@@ -231,7 +234,6 @@ export class ActionBuilder<
 	}
 
 	public handler(fn: ActionFn<Params, Query, Body, Output, Ctx>) {
-		this._middlewares.push(fn)
 		return new Action<Params, Query, Body, Output, Ctx>({
 			fn,
 			params: this._params,
