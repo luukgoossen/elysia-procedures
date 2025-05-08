@@ -12,13 +12,6 @@ A type-safe, composable procedure builder for [Elysia](https://elysiajs.com/) ap
   - [Adding Schema Validation](#adding-schema-validation)
   - [Creating Actions](#creating-actions)
   - [Integrating with Elysia](#integrating-with-elysia)
-- [API Reference](#api-reference)
-  - [createProcedure](#createprocedure)
-  - [ProcedureBuilder](#procedurebuilder)
-  - [ActionBuilder](#actionbuilder)
-  - [Action](#action)
-- [Contributing](#contributing)
-- [License](#license)
 - [Acknowledgments](#acknowledgments)
 
 ## Features
