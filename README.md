@@ -198,4 +198,4 @@ const app = new Elysia()
 - [Elysia](https://elysiajs.com/) - The fast, and friendly Bun web framework
 - [TypeBox](https://github.com/sinclairzx81/typebox) - JSON Schema Type Builder with Static Type Resolution
 - [tRPC](https://trpc.io/) - End-to-end typesafe APIs made easy, inspiration for the procedure patterns
-- [ZSA](https://github.com/fabian-hiller/zsa) - Validation library that inspired aspects of the middleware approach
+- [ZSA](https://zsa.vercel.app/) - Validation library that inspired aspects of the middleware approach
