@@ -29,7 +29,7 @@ const authProcedure = createProcedure('User Authentication', baseProcedure)
 		}
 	})
 
-const baseAction = baseProcedure.createAction("Base", { description: "Base Action" })
+const baseAction = baseProcedure.createAction("Base Route", { description: "Base Action" })
 	.body(Type.Object({
 		id: Type.Number({ description: "some id" }),
 		key: Type.String({ description: "some key" })
@@ -48,7 +48,7 @@ const baseAction = baseProcedure.createAction("Base", { description: "Base Actio
 		}
 	})
 
-const testAction = authProcedure.createAction("Test")
+const testAction = authProcedure.createAction("Test Route")
 	.output(Type.String({ description: "some output" }))
 	.build(() => {
 		return "Hello World"
@@ -56,7 +56,7 @@ const testAction = authProcedure.createAction("Test")
 
 
 const app = new Elysia()
-	.use(swagger())
+	.use(swagger({ documentation: { info: { title: "Elysia API", version: "1.0.0" } } }))
 	.post("/base/:name", baseAction.handle, { ...baseAction.docs, tags: ["Base"] })
 	.get("/test/:name/:token", testAction.handle, { ...testAction.docs, tags: ["Test"] })
 

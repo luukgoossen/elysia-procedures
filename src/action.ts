@@ -1,5 +1,4 @@
 // import dependencies
-import { Type } from '@sinclair/typebox'
 import { Value } from '@sinclair/typebox/value'
 import { merge } from './utils'
 

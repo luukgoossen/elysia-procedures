@@ -2,16 +2,16 @@
 import { Type } from '@sinclair/typebox'
 
 // import types
-import type { TSchema, Intersect, TObject, TProperties } from '@sinclair/typebox'
+import type { TObject } from '@sinclair/typebox'
 import type { Merge, Simplify } from 'type-fest'
 
-export type MergeSchema<Prev extends TSchema | undefined, Next extends TObject> =
-	Prev extends TSchema
-	? Intersect<[Prev, Next]>
-	: Next
-
-export type MergeObject<Prev extends TProperties, Next extends TProperties> = TObject<Simplify<Merge<Prev, Next>>>
-
+/**
+ * Merges two TypeBox object schemas into one.
+ * The next schema's properties will override the previous schema's properties.
+ * @param prev - The optional previous object schema.
+ * @param next - The next object schema to merge with the previous one.
+ * @returns A new object schema that combines properties from both schemas.
+ */
 export const merge = <
 	Prev extends TObject | undefined,
 	Next extends TObject,
@@ -19,15 +19,3 @@ export const merge = <
 	...(prev ? prev.properties : {}),
 	...next.properties,
 }, { additionalProperties: false }) as any
-
-const typeOne = Type.Object({
-	name: Type.String(),
-	age: Type.Number()
-})
-
-const typeTwo = Type.Object({
-	email: Type.String(),
-	verified: Type.Boolean()
-})
-
-const merged = merge(typeOne, typeTwo)
