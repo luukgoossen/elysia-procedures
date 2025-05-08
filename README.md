@@ -1,6 +1,6 @@
-# Elysia Procedures
+# TypeBox Procedures
 
-A type-safe, composable procedure builder for [Elysia](https://elysiajs.com/) applications. Build robust API endpoints with middleware support, input validation, and full TypeScript support. Inspired by tRPC's procedure pattern for end-to-end type safety.
+A type-safe, composable procedure builder with [TypeBox](https://github.com/sinclairzx81/typebox) validation. Build robust API endpoints with middleware support, input validation, and full TypeScript support. Inspired by tRPC's procedure pattern for end-to-end type safety.
 
 ## Table of Contents
 
