@@ -1,14 +1,14 @@
 {
-  "name": "elysia-procedures",
+  "name": "typebox-procedures",
   "module": "./src/index.ts",
   "type": "module",
   "author": "Luuk Goossen",
   "license": "MIT",
-  "version": "0.0.1",
-  "description": "tRPC style procedures for Elysia",
+  "version": "1.0.0",
+  "description": "tRPC style procedures and actions with TypeBox validation",
   "repository": {
     "type": "git",
-    "url": "https://github.com/luukgoossen/elysia-procedures.git"
+    "url": "https://github.com/luukgoossen/typebox-procedures.git"
   },
   "devDependencies": {
     "@types/bun": "latest",
@@ -17,10 +17,5 @@
   "peerDependencies": {
     "typescript": "^5",
     "@sinclair/typebox": "^0.34.33"
-  },
-  "dependencies": {
-    "@elysiajs/swagger": "^1.3.0",
-    "elysia": "^1.3.0",
-    "zod": "^3.24.4"
   }
 }

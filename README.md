@@ -26,23 +26,23 @@ A type-safe, composable procedure builder for [Elysia](https://elysiajs.com/) ap
 
 ```bash
 # Using npm
-npm install elysia-procedures
+npm install typebox-procedures
 
 # Using yarn
-yarn add elysia-procedures
+yarn add typebox-procedures
 
 # Using pnpm
-pnpm add elysia-procedures
+pnpm add typebox-procedures
 
 # Using bun
-bun add elysia-procedures
+bun add typebox-procedures
 ```
 
 ## Quick Start
 
 ```typescript
 import { Elysia } from 'elysia';
-import { createProcedure } from 'elysia-procedures';
+import { createProcedure } from 'typebox-procedures';
 import { Type } from '@sinclair/typebox';
 
 // Create an authentication middleware procedure
@@ -99,12 +99,8 @@ const getUserAction = userProcedure.createAction('Get User')
     };
   });
 
-// Use with Elysia
-const app = new Elysia()
-  .get('/users/:userId', getUserAction.handle, {...getUserAction.docs, tags: ['Users']})
-  .listen(3000);
-
-console.log('Server running on http://localhost:3000');
+// Get the result of the action
+const user = await getUserAction.run(request, { params, query, body });
 ```
 
 ## Usage
@@ -114,7 +110,7 @@ console.log('Server running on http://localhost:3000');
 A procedure is a reusable foundation for your API endpoints. It can define common parameters, validation schemas, and middleware.
 
 ```typescript
-import { createProcedure } from 'elysia-procedures';
+import { createProcedure } from 'typebox-procedures';
 import { Type } from '@sinclair/typebox';
 
 // Create a basic procedure
@@ -181,6 +177,8 @@ const getProductAction = productProcedure.createAction('Get Product')
 ```
 
 ### Integrating with Elysia
+
+This library has first class support for integrating with the Elysia framework through the action.handle function, which expects an Elysia context, and action.docs which returns Elysia-formatted documentation defining the input and output schemas in a type-safe way.
 
 ```typescript
 import { Elysia } from 'elysia';
