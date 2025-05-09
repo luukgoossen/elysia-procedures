@@ -7,7 +7,7 @@ module.exports = {
 	parserOptions: {
 		ecmaVersion: 'latest', sourceType: 'module', project: ['./tsconfig.json']
 	},
-	ignorePatterns: ['.eslintrc.cjs', "**/*.tst.ts"],
+	ignorePatterns: ['.eslintrc.cjs', '**/*.tst.ts'],
 	plugins: ['@typescript-eslint', '@stylistic'],
 	rules: {
 		'quotes': ['warn', 'single', { avoidEscape: true, allowTemplateLiterals: true }],

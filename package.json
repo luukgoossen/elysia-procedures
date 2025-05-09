@@ -26,6 +26,7 @@
     "@types/bun": "latest",
     "@typescript-eslint/eslint-plugin": "^6.21.0",
     "eslint": "^8",
+    "eslint-formatter-pretty": "^5.0.0",
     "tstyche": "^3.5.0",
     "type-fest": "^4.41.0"
   },

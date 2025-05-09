@@ -1,0 +1,83 @@
+name: Run Linting and Tests
+
+on:
+  pull_request:
+    branches:
+      - '*'
+  push:
+    branches:
+      - main
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v1
+      with:
+        bun-version: latest
+        
+    - name: Install dependencies
+      run: bun install
+      
+    - name: Lint with ESLint
+      if: always()
+      id: eslint
+      uses: reviewdog/action-eslint@v1
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        reporter: github-check
+        fail_level: error
+        filter_mode: nofilter
+        eslint_flags: "."
+        
+    - name: Lint with TypeScript
+      if: always()
+      id: tsc
+      run: bun run tsc --noEmit
+        
+    - name: Run tests with Bun
+      if: always()
+      id: bun-test
+      run: bun test
+      
+    - name: Run tests with TStyche
+      if: always()
+      id: tstyche
+      run: bun run tstyche
+        
+    - name: Generate Summary
+      if: always()
+      run: |
+        echo "## Linting and Tests Results" >> $GITHUB_STEP_SUMMARY
+        
+        if [[ "${{ steps.eslint.outcome }}" == "success" ]]; then
+          echo "✅ **ESLint:** Passed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ **ESLint:** Failed:" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [[ "${{ steps.tsc.outcome }}" == "success" ]]; then
+          echo "✅ **TypeScript:** Passed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ **TypeScript:** Failed:" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [[ "${{ steps.bun-test.outcome }}" == "success" ]]; then
+          echo "✅ **Bun Tests:** Passed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ **Bun Tests:** Failed" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [[ "${{ steps.tstyche.outcome }}" == "success" ]]; then
+          echo "✅ **TStyche Tests:** Passed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ **TStyche Tests:** Failed" >> $GITHUB_STEP_SUMMARY
+        fi
