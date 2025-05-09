@@ -1,9 +1,10 @@
 // import dependencies
 import { Value } from '@sinclair/typebox/value'
-import { merge } from './utils'
+import { merge, type SafeTObject } from './utils'
 
 // import types
 import type { TSchema, TObject, Static } from '@sinclair/typebox'
+import type { Promisable } from 'type-fest'
 import type { Context, ProcedureFnArgs, AnyMiddleware } from './procedure'
 
 /**
@@ -63,7 +64,7 @@ export type ActionFn<
 	Body extends TObject | undefined,
 	Output extends TSchema | undefined,
 	Out = Output extends TSchema ? Static<Output> : any
-> = (input: ProcedureFnArgs<Ctx, Params, Query, Body>) => Promise<Out> | Out
+> = (input: ProcedureFnArgs<Ctx, Params, Query, Body>) => Promisable<Out>
 
 /**
  * Builder class for creating actions with a type-safe API.
@@ -106,7 +107,7 @@ export class ActionBuilder<
 	 * Adds or merges route parameter definitions to the action.
 	 * @param params - The TypeBox schema defining the route parameters
 	 */
-	public params = <T extends TObject>(params: T) => {
+	public params = <T extends TObject>(params: SafeTObject<T, Params>) => {
 		const mergedParams = merge(this._state.params, params)
 		return this._apply<typeof mergedParams, Query, Body, Output>({
 			params: mergedParams
@@ -148,9 +149,9 @@ export class ActionBuilder<
 	 * @param handler - The function to execute when this action is called
 	 * @returns A built action with the given handler
 	 */
-	public build = (handler: ActionFn<Ctx, Params, Query, Body, Output>) => {
-		return new Action<Ctx, Params, Query, Body, Output>({
-			handler,
+	public build = <Out>(handler: ActionFn<Ctx, Params, Query, Body, Output, Output extends TSchema ? Static<Output> : Out>) => {
+		return new Action<Ctx, Params, Query, Body, Output, Output extends TSchema ? Static<Output> : Out>({
+			handler: handler as any,
 			...this._state
 		})
 	}
@@ -166,6 +167,7 @@ export class Action<
 	Query extends TObject | undefined,
 	Body extends TObject | undefined,
 	Output extends TSchema | undefined,
+	Out,
 > {
 	private _handler: ActionFn<Ctx, Params, Query, Body, Output>
 	private _middlewares: AnyMiddleware[]
@@ -228,9 +230,9 @@ export class Action<
 		const { request, params, query, body } = context
 
 		return await this._execute(request, {
-			params: params as any,
-			query: query as any,
-			body: body as any,
+			params: params,
+			query: query,
+			body: body,
 		})
 	}
 
@@ -241,10 +243,31 @@ export class Action<
 	 * @returns 
 	 */
 	public run = async (request: Request, input: {
-		params: Params extends TObject ? Params : any,
-		query: Query extends TObject ? Params : any,
-		body: Body extends TObject ? Params : any,
-	}) => {
+		params: Params extends TObject ? Static<Params> : any,
+		query: Query extends TObject ? Static<Query> : any,
+		body: Body extends TObject ? Static<Body> : any,
+	}): Promise<Out> => {
+		// validate the params
+		let params: any = input.params
+		if (this.params) {
+			params = (this.params ? Value.Clean(this.params, input.params) : input.params)
+			Value.Assert(this.params, params)
+		}
+
+		// validate the query
+		let query: any = input.query
+		if (this.query) {
+			query = (this.query ? Value.Clean(this.query, input.query) : input.query)
+			Value.Assert(this.query, query)
+		}
+
+		// validate the body
+		let body: any = input.body
+		if (this.body) {
+			body = (this.body ? Value.Clean(this.body, input.body) : input.body)
+			Value.Assert(this.body, body)
+		}
+
 		// run the action
 		const result = await this._execute(request, input)
 
@@ -252,22 +275,17 @@ export class Action<
 		if (this.output) {
 			const output = Value.Clean(this.output, result)
 			Value.Assert(this.output, output)
-			return output
+			return output as any
 		} else {
-			return result
+			return result as any
 		}
 	}
 
 	private _execute = async (request: Request, input: {
-		params: Params extends TObject ? Params : any,
-		query: Query extends TObject ? Params : any,
-		body: Body extends TObject ? Params : any,
-	}) => {
-		// validate the inputs
-		const params = (this.params ? Value.Parse(this.params, input.params) : input.params)
-		const query = (this.query ? Value.Parse(this.query, input.query) : input.query)
-		const body = (this.body ? Value.Parse(this.body, input.body) : input.body)
-
+		params: Params extends TObject ? Static<Params> : any,
+		query: Query extends TObject ? Static<Query> : any,
+		body: Body extends TObject ? Static<Body> : any,
+	}): Promise<Out> => {
 		// create the base context
 		let ctx = {
 			request
@@ -275,18 +293,15 @@ export class Action<
 
 		// run the middlewares
 		for (const middleware of this._middlewares) {
-			console.log(`Middleware: ${middleware.name}`)
-			console.profile(`Middleware: ${middleware.name}`)
-			const out = await middleware.execute({ params, query, body, ctx })
+			const out = await middleware.execute({ params: input.params, query: input.query, body: input.body, ctx })
 			if (out) ctx = { ...ctx, ...out }
-			console.profileEnd(`Middleware: ${middleware.name}`)
 		}
 
 		// run the action
 		return await this._handler({
-			params: params as any,
-			query: query as any,
-			body: body as any,
+			params: input.params,
+			query: input.query,
+			body: input.body,
 			ctx: ctx as Ctx
 		})
 	}
