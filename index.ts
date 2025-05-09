@@ -7,15 +7,15 @@ import { swagger } from '@elysiajs/swagger'
 // example usage
 const baseProcedure = createProcedure('Base Route Handler')
 	.params(Type.Object({
-		name: Type.String({ description: "some name" })
+		name: Type.String({ description: 'some name' })
 	}))
 	.build()
 
 const authProcedure = createProcedure('User Authentication', baseProcedure)
 	.params(Type.Object({
-		token: Type.String({ description: "some name" })
+		token: Type.String({ description: 'some name' })
 	}))
-	.build(({ ctx, params }) => ({
+	.build(({ params }) => ({
 		user: {
 			name: params.name,
 			token: params.token,
@@ -23,17 +23,17 @@ const authProcedure = createProcedure('User Authentication', baseProcedure)
 	}))
 
 const userSchema = Type.Object({
-	name: Type.String({ description: "some name" }),
+	name: Type.String({ description: 'some name' }),
 })
 
 const getUserAction = authProcedure.createAction('Get User')
 	.output(userSchema)
-	.build(({ ctx, params }) => ctx.user)
+	.build(({ ctx }) => ctx.user)
 
 const app = new Elysia()
-	.use(swagger({ documentation: { info: { title: "Elysia API", version: "1.0.0" } } }))
-	.get("/user/:name", getUserAction.handle, { ...getUserAction.docs, tags: ["User"] })
+	.use(swagger({ documentation: { info: { title: 'Elysia API', version: '1.0.0' } } }))
+	.get('/user/:name', getUserAction.handle, { ...getUserAction.docs, tags: ['User'] })
 
 app.listen(3000, () => {
-	console.log(`🦊 Elysia is running at http://${app.server?.hostname}:${app.server?.port}`);
-});
+	console.log(`🦊 Elysia is running at http://${app.server?.hostname}:${app.server?.port}`)
+})

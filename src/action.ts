@@ -118,7 +118,7 @@ export class ActionBuilder<
 	 * Adds or merges query parameter definitions to the action.
 	 * @param query - The TypeBox schema defining the query parameters
 	 */
-	public query = <T extends TObject>(query: T) => {
+	public query = <T extends TObject>(query: SafeTObject<T, Query>) => {
 		const mergedQuery = merge(this._state.query, query)
 		return this._apply<Params, typeof mergedQuery, Body, Output>({
 			query: mergedQuery
@@ -129,7 +129,7 @@ export class ActionBuilder<
 	 * Adds or merges request body definitions to the action.
 	 * @param body - The TypeBox schema defining the request body
 	 */
-	public body = <T extends TObject>(body: T) => {
+	public body = <T extends TObject>(body: SafeTObject<T, Body>) => {
 		const mergedBody = merge(this._state.body, body)
 		return this._apply<Params, Query, typeof mergedBody, Output>({
 			body: mergedBody
@@ -215,11 +215,11 @@ export class Action<
 
 	/**
 	 * Elysia handler for the action
-	 * 
+	 *
 	 * This method does not validate the inputs, as Elysia REST's handlers will do it for us with nicer errors.
 	 * Do not use this method outside of Elysia's REST handlers.
 	 * @param context The Elysia context
-	 * @returns 
+	 * @returns
 	 */
 	public handle = async (context: {
 		request: Request
@@ -240,7 +240,7 @@ export class Action<
 	 * General handler for the action
 	 * @param request The HTTP request
 	 * @param input The inputs for the action
-	 * @returns 
+	 * @returns
 	 */
 	public run = async (request: Request, input: {
 		params: Params extends TObject ? Static<Params> : any,

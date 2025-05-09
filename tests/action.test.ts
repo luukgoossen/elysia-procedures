@@ -223,11 +223,11 @@ describe('Input and Output Validation', () => {
 		const result = await action.run(new Request('https://example.com'), input)
 		expect(result).toEqual({ result: '123-42' })
 
-		// Invalid parameter should throw
+		// invalid parameter should throw
 		const invalidInput = {
 			params: {
 				id: '123',
-				count: '42' // Should be a number
+				count: '42' // should be a number
 			},
 			query: undefined,
 			body: undefined
@@ -249,7 +249,7 @@ describe('Input and Output Validation', () => {
 			.build(() => ({
 				result: true,
 				count: 42,
-				// This field should be removed by the output validation
+				// this field should be removed by the output validation
 				extraField: 'should be removed'
 			}))
 

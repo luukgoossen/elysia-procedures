@@ -6,6 +6,7 @@ import { merge } from './utils'
 import type { Static, TObject } from '@sinclair/typebox'
 import type { Merge, Promisable, Simplify } from 'type-fest'
 import type { ActionDetails } from './action'
+import type { SafeTObject } from './utils'
 
 /**
  * Configuration arguments for creating a procedure.
@@ -74,7 +75,7 @@ export type Context = {
  * Middleware class representing a function to run during request processing.
  * A middleware processes requests before they reach the main action handler.
  */
-class Middleware<
+export class Middleware<
 	Ctx extends Context,
 	Params extends TObject | undefined,
 	Query extends TObject | undefined,
@@ -105,7 +106,7 @@ class Middleware<
  * Builder class for creating procedures with a type-safe API.
  * Enables chaining methods to require parameters, query, body, and handlers.
  */
-class ProcedureBuilder<
+export class ProcedureBuilder<
 	Ctx extends Context,
 	Params extends TObject | undefined,
 	Query extends TObject | undefined,
@@ -140,7 +141,7 @@ class ProcedureBuilder<
 	 * Adds or merges route parameter definitions to the procedure.
 	 * @param params - The TypeBox schema defining the route parameters
 	 */
-	public params = <T extends TObject>(params: T) => {
+	public params = <T extends TObject>(params: SafeTObject<T, Params>) => {
 		const mergedParams = merge(this._state.params, params)
 		return this._apply<typeof mergedParams, Query, Body>({
 			params: mergedParams
@@ -151,7 +152,7 @@ class ProcedureBuilder<
 	 * Adds or merges query parameter definitions to the procedure.
 	 * @param query - The TypeBox schema defining the query parameters
 	 */
-	public query = <T extends TObject>(query: T) => {
+	public query = <T extends TObject>(query: SafeTObject<T, Query>) => {
 		const mergedQuery = merge(this._state.query, query)
 		return this._apply<Params, typeof mergedQuery, Body>({
 			query: mergedQuery
@@ -162,7 +163,7 @@ class ProcedureBuilder<
 	 * Adds or merges request body definitions to the procedure.
 	 * @param body - The TypeBox schema defining the request body
 	 */
-	public body = <T extends TObject>(body: T) => {
+	public body = <T extends TObject>(body: SafeTObject<T, Body>) => {
 		const mergedBody = merge(this._state.body, body)
 		return this._apply<Params, Query, typeof mergedBody>({
 			body: mergedBody
@@ -191,7 +192,7 @@ class ProcedureBuilder<
  * The procedure can be extended to create more specific procedures
  * or used to create actions directly.
  */
-class Procedure<
+export class Procedure<
 	Ctx extends Context,
 	Params extends TObject | undefined,
 	Query extends TObject | undefined,
@@ -234,11 +235,11 @@ class Procedure<
 
 /**
  * Creates a new procedure builder with typed params, query, and body.
- * 
+ *
  * @param name - Descriptive name for the procedure (used in logs and debugging)
  * @param base - Optional base procedure to inherit from
  * @param role - Optional role for authorization purposes
- * 
+ *
  * @example
  * ```ts
  * const userProcedure = createProcedure('User Authentication')

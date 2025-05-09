@@ -2,7 +2,7 @@
 import { Type } from '@sinclair/typebox'
 
 // import types
-import type { TObject, TProperties } from '@sinclair/typebox'
+import type { TObject } from '@sinclair/typebox'
 import type { Merge, Simplify } from 'type-fest'
 
 /**
@@ -17,7 +17,8 @@ export const merge = <
 	Next extends TObject | never,
 >(prev: Prev, next: Next): Next extends TObject
 	? TObject<Simplify<Merge<Prev extends TObject ? Prev['properties'] : unknown, Next['properties']>>>
-	: Prev => Type.Object({
+	: Prev =>
+	Type.Object({
 		...next.properties,
 		...(prev ? prev.properties : {}),
 	}, { additionalProperties: false }) as any

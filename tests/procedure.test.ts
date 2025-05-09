@@ -3,7 +3,7 @@ import { describe, test, expect, mock } from 'bun:test'
 import { Type } from '@sinclair/typebox'
 import { createProcedure } from '@/procedure'
 
-describe('Basic procedure creation', () => {
+describe('Basic Procedure Creation', () => {
 	test('should create a procedure with name', () => {
 		const procedure = createProcedure('Test Procedure').build()
 		expect(procedure).toBeDefined()
@@ -20,7 +20,7 @@ describe('Basic procedure creation', () => {
 	})
 })
 
-describe('Procedure schema configuration', () => {
+describe('Procedure Schema Configuration', () => {
 	test('should define params schema', () => {
 		const procedure = createProcedure('Test Procedure')
 			.params(Type.Object({ id: Type.String() }))
@@ -80,7 +80,7 @@ describe('Procedure schema configuration', () => {
 	})
 })
 
-describe('Middleware execution', () => {
+describe('Middleware Execution', () => {
 	test('should execute middleware with correct arguments', async () => {
 		const mockHandler = mock(() => ({ processed: true }))
 
@@ -103,7 +103,7 @@ describe('Middleware execution', () => {
 	})
 })
 
-describe('Chained procedures', () => {
+describe('Chained Procedures', () => {
 	test('should inherit schemas from base procedure', () => {
 		const baseProcedure = createProcedure('Base Procedure')
 			.params(Type.Object({ id: Type.String() }))

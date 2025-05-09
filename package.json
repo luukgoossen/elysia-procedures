@@ -8,10 +8,25 @@
   "description": "tRPC style procedures and actions with TypeBox validation",
   "repository": {
     "type": "git",
-    "url": "https://github.com/luukgoossen/typebox-procedures.git"
+    "url": "git+https://github.com/luukgoossen/typebox-procedures.git"
+  },
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./procedure": "./src/procedure.ts",
+    "./action": "./src/action.ts",
+    "./utils": "./src/utils.ts"
+  },
+  "scripts": {
+    "build": "bun build src/index.ts --outdir=dist --format=cjs",
+    "test": "bun run eslint . && bun run tsc --noEmit && bun test && bun run tstyche"
   },
   "devDependencies": {
+    "@stylistic/eslint-plugin": "^1",
     "@types/bun": "latest",
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "eslint": "^8",
+    "tstyche": "^3.5.0",
     "type-fest": "^4.41.0"
   },
   "peerDependencies": {
