@@ -1,5 +1,3 @@
-import { createProcedure as cp } from './procedure'
-
 export {
 	createProcedure
 } from './procedure'

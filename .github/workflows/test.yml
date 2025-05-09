@@ -1,4 +1,4 @@
-name: Run Linting and Tests
+name: On Pull Requests
 
 on:
   pull_request:
@@ -7,6 +7,7 @@ on:
 
 jobs:
   test:
+    name: Run Linting and Tests
     runs-on: ubuntu-latest
     permissions:
       contents: read
