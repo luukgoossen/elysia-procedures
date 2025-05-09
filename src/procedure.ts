@@ -4,7 +4,7 @@ import { merge } from './utils'
 
 // import types
 import type { Static, TObject } from '@sinclair/typebox'
-import type { Merge } from 'type-fest'
+import type { Merge, Promisable, Simplify } from 'type-fest'
 import type { ActionDetails } from './action'
 
 /**
@@ -37,7 +37,7 @@ export type ProcedureFnArgs<
 	Body extends TObject | undefined
 > = {
 	/** Context object with request data and middleware results */
-	ctx: Ctx
+	ctx: Simplify<Ctx>
 	/** Parsed and validated route parameters */
 	params: Params extends TObject ? Static<Params> : undefined
 	/** Parsed and validated query parameters */
@@ -55,7 +55,7 @@ export type ProcedureFn<
 	Query extends TObject | undefined,
 	Body extends TObject | undefined,
 	Next = object | void
-> = (input: ProcedureFnArgs<Ctx, Params, Query, Body>) => Promise<Next> | Next
+> = (input: ProcedureFnArgs<Ctx, Params, Query, Body>) => Promisable<Next>
 
 /**
  * Type alias for any middleware type.
@@ -174,11 +174,13 @@ class ProcedureBuilder<
 	 * @param handler - The function to execute when this procedure is called
 	 * @returns A built procedure with the given handler
 	 */
-	public build = <Next extends Object | void>(handler: ProcedureFn<Ctx, Params, Query, Body, Next>) => {
-		const middleware = new Middleware<Ctx, Params, Query, Body, Next>(handler, this._state.name)
-		this._state.middlewares = [...this._state.middlewares, middleware]
+	public build = <Next extends object | void>(handler?: ProcedureFn<Ctx, Params, Query, Body, Next>) => {
+		if (handler) {
+			const middleware = new Middleware<Ctx, Params, Query, Body, Next>(handler, this._state.name)
+			this._state.middlewares = [...this._state.middlewares, middleware]
+		}
 
-		return new Procedure<Context & Merge<Ctx, Next>, Params, Query, Body>(this._state)
+		return new Procedure<Simplify<Context & Merge<Ctx, Next extends object ? Next : unknown>>, Params, Query, Body>(this._state)
 	}
 }
 

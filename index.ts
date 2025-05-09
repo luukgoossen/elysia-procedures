@@ -9,56 +9,30 @@ const baseProcedure = createProcedure('Base Route Handler')
 	.params(Type.Object({
 		name: Type.String({ description: "some name" })
 	}))
-	.build(({ params }) => {
-		return {
-			user: params.name
-		}
-	})
+	.build()
 
 const authProcedure = createProcedure('User Authentication', baseProcedure)
 	.params(Type.Object({
-		token: Type.String({ description: "some token" })
+		token: Type.String({ description: "some name" })
 	}))
-	.build(({ ctx, params, body }) => {
-		console.log('token: ', params.token)
-		console.log('params: ', params.name)
-		console.log('user: ', ctx.user)
-
-		return {
-			user: 12
+	.build(({ ctx, params }) => ({
+		user: {
+			name: params.name,
+			token: params.token,
 		}
-	})
-
-const baseAction = baseProcedure.createAction("Base Route", { description: "Base Action" })
-	.body(Type.Object({
-		id: Type.Number({ description: "some id" }),
-		key: Type.String({ description: "some key" })
 	}))
-	.output(Type.Object({
-		id: Type.Number({ description: "some id" }),
-		key: Type.String({ description: "some key" }),
-		user: Type.String({ description: "some user" }),
-	}))
-	.build(({ ctx, body }) => {
-		return {
-			id: body.id,
-			key: body.key,
-			user: ctx.user,
-			test: "test"
-		}
-	})
 
-const testAction = authProcedure.createAction("Test Route")
-	.output(Type.String({ description: "some output" }))
-	.build(() => {
-		return "Hello World"
-	})
+const userSchema = Type.Object({
+	name: Type.String({ description: "some name" }),
+})
 
+const getUserAction = authProcedure.createAction('Get User')
+	.output(userSchema)
+	.build(({ ctx, params }) => ctx.user)
 
 const app = new Elysia()
 	.use(swagger({ documentation: { info: { title: "Elysia API", version: "1.0.0" } } }))
-	.post("/base/:name", baseAction.handle, { ...baseAction.docs, tags: ["Base"] })
-	.get("/test/:name/:token", testAction.handle, { ...testAction.docs, tags: ["Test"] })
+	.get("/user/:name", getUserAction.handle, { ...getUserAction.docs, tags: ["User"] })
 
 app.listen(3000, () => {
 	console.log(`🦊 Elysia is running at http://${app.server?.hostname}:${app.server?.port}`);
