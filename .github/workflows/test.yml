@@ -1,15 +1,13 @@
-name: Run Linting and Tests
+name: On Pull Requests
 
 on:
   pull_request:
     branches:
       - '*'
-  push:
-    branches:
-      - main
 
 jobs:
   test:
+    name: Run Linting and Tests
     runs-on: ubuntu-latest
     permissions:
       contents: read
