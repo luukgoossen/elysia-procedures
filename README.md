@@ -26,23 +26,23 @@ A type-safe, composable procedure builder with [TypeBox](https://github.com/sinc
 
 ```bash
 # Using npm
-npm install typebox-procedures
+npm install @luukgoossen/typebox-procedures
 
 # Using yarn
-yarn add typebox-procedures
+yarn add @luukgoossen/typebox-procedures
 
 # Using pnpm
-pnpm add typebox-procedures
+pnpm add @luukgoossen/typebox-procedures
 
 # Using bun
-bun add typebox-procedures
+bun add @luukgoossen/typebox-procedures
 ```
 
 ## Quick Start
 
 ```typescript
 import { Elysia } from 'elysia';
-import { createProcedure } from 'typebox-procedures';
+import { createProcedure } from '@luukgoossen/typebox-procedures';
 import { Type } from '@sinclair/typebox';
 
 // Create an authentication middleware procedure
@@ -110,7 +110,7 @@ const user = await getUserAction.run(request, { params, query, body });
 A procedure is a reusable foundation for your API endpoints. It can define common parameters, validation schemas, and middleware.
 
 ```typescript
-import { createProcedure } from 'typebox-procedures';
+import { createProcedure } from '@luukgoossen/typebox-procedures';
 import { Type } from '@sinclair/typebox';
 
 // Create a basic procedure

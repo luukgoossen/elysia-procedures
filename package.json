@@ -1,5 +1,5 @@
 {
-  "name": "typebox-procedures",
+  "name": "@luukgoossen/typebox-procedures",
   "module": "./src/index.ts",
   "type": "module",
   "author": "Luuk Goossen",
@@ -11,6 +11,10 @@
     "url": "git+https://github.com/luukgoossen/typebox-procedures.git"
   },
   "main": "./src/index.ts",
+  "files": [
+    "src",
+    "dist"
+  ],
   "exports": {
     ".": "./src/index.ts",
     "./procedure": "./src/procedure.ts",
@@ -34,5 +38,8 @@
     "typescript": "^5",
     "@sinclair/typebox": "^0.34.33",
     "elysia": "^1.3.1"
+  },
+  "publishConfig": {
+    "access": "restricted"
   }
 }
