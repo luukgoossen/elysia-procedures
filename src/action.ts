@@ -248,37 +248,32 @@ export class Action<
 		body: Body extends TObject ? Static<Body> : any,
 	}): Promise<Out> => {
 		// validate the params
-		let params: any = input.params
+		let params = input.params
 		if (this.params) {
-			params = (this.params ? Value.Clean(this.params, input.params) : input.params)
-			Value.Assert(this.params, params)
+			params = this.params ? Value.Parse(this.params, input.params) : input.params
 		}
 
 		// validate the query
-		let query: any = input.query
+		let query = input.query
 		if (this.query) {
-			query = (this.query ? Value.Clean(this.query, input.query) : input.query)
-			Value.Assert(this.query, query)
+			query = this.query ? Value.Parse(this.query, input.query) : input.query
 		}
 
 		// validate the body
-		let body: any = input.body
+		let body = input.body
 		if (this.body) {
-			body = (this.body ? Value.Clean(this.body, input.body) : input.body)
-			Value.Assert(this.body, body)
+			body = this.body ? Value.Parse(this.body, input.body) : input.body
 		}
 
 		// run the action
-		const result = await this._execute(request, input)
+		const result = await this._execute(request, {
+			params,
+			query,
+			body
+		})
 
 		// validate the output
-		if (this.output) {
-			const output = Value.Clean(this.output, result)
-			Value.Assert(this.output, output)
-			return output as any
-		} else {
-			return result as any
-		}
+		return this.output ? Value.Parse(this.output, result) : result
 	}
 
 	private _execute = async (request: Request, input: {
