@@ -227,7 +227,7 @@ describe('Input and Output Validation', () => {
 		const invalidInput = {
 			params: {
 				id: '123',
-				count: '42' // should be a number
+				count: 'not-a-number' // should be a number
 			},
 			query: undefined,
 			body: undefined
