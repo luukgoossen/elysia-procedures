@@ -282,36 +282,38 @@ export class Action<
 		query: Query extends TObject ? Static<Query> : any,
 		body: Body extends TObject ? Static<Body> : any,
 	}): Promise<Out> => {
-		// create the base context
-		let ctx = {
-			request
-		}
+		return await record(`Action: ${this.name}`, async () => {
+			// create the base context
+			let ctx = {
+				request
+			}
 
-		// run the middlewares
-		for (const middleware of this._middlewares) {
-			await record(middleware.name, {
+			// run the middlewares
+			for (const middleware of this._middlewares) {
+				await record(middleware.name, {
+					attributes: {
+						type: 'middleware',
+						action: this.name,
+					}
+				}, async () => {
+					const out = await middleware.execute({ params: input.params, query: input.query, body: input.body, ctx })
+					if (out) ctx = { ...ctx, ...out }
+				})
+			}
+
+			// run the action
+			return await record('Action Handler', {
 				attributes: {
-					type: 'middleware',
+					type: 'handler',
 					action: this.name,
 				}
 			}, async () => {
-				const out = await middleware.execute({ params: input.params, query: input.query, body: input.body, ctx })
-				if (out) ctx = { ...ctx, ...out }
-			})
-		}
-
-		// run the action
-		return record(this.name, {
-			attributes: {
-				type: 'handler',
-				action: this.name,
-			}
-		}, async () => {
-			return await this._handler({
-				params: input.params,
-				query: input.query,
-				body: input.body,
-				ctx: ctx as Ctx
+				return await this._handler({
+					params: input.params,
+					query: input.query,
+					body: input.body,
+					ctx: ctx as Ctx
+				})
 			})
 		})
 	}
