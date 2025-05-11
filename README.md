@@ -20,6 +20,7 @@ A type-safe, composable procedure builder with [TypeBox](https://github.com/sinc
 - ✅ **Validation** - Built-in schema validation using TypeBox
 - 🧩 **Composable** - Create reusable procedures and middleware
 - 📚 **Documentation** - Co-locate your OpenAPI documentation with the handlers
+- 💾 **Caching** - Dependency-based request-level caching
 - 🔗 **tRPC-style** - Familiar procedure-based patterns for type-safe APIs
 
 ## Installation
@@ -180,6 +181,8 @@ const getProductAction = productProcedure.createAction('Get Product')
 
 This library has first class support for integrating with the Elysia framework through the action.handle function, which expects an Elysia context, and action.docs which returns Elysia-formatted documentation defining the input and output schemas in a type-safe way.
 
+It also hooks into Elysia's OpenTelemetry plugin to add tracing to procedure and action runs, providing step by step information about the executed chain.
+
 ```typescript
 import { Elysia } from 'elysia';
 
@@ -187,6 +190,49 @@ const app = new Elysia()
   .get('/products/:productId', getProductAction.handle, { ...getProductAction.docs, tags: ['Product'] })
   .post('/products/:productId/update', updateProductAction.handle, { ...updateProductAction.docs, tags: ['Product'] })
   .listen(3000);
+```
+
+## Caching
+
+This library supports request-level caching to ensure that procedures are executed only once per http request. To enable caching for a procedure, you can supply an array of dependencies to the procedure builder.
+
+```typescript
+import { createProcedure } from '@luukgoossen/typebox-procedures';
+import { Type } from '@sinclair/typebox';
+
+// Create a basic procedure
+const baseProcedure = createProcedure('Basic Procedure')
+  .cache(() => [])
+  .build(async ({ ctx }) => {
+    console.log('Request received:', ctx.request.url);
+    
+    // simulate a long-running process
+		await new Promise(resolve => setTimeout(resolve, 1000))
+
+    return { requestTime: new Date() };
+  });
+```
+
+Any array will enable caching for the procedure, but if input variables might change between different calls to the same procedure for the same request, it is important to include their keys in the array.
+
+```typescript
+import { createProcedure } from '@luukgoossen/typebox-procedures';
+import { Type } from '@sinclair/typebox';
+
+// Create a basic procedure
+const baseProcedure = createProcedure('Basic Procedure')
+  .params(Type.Object({
+    productId: Type.String()
+  }))
+  .cache(({ params }) => [params.productId])
+  .build(async ({ ctx }) => {
+    console.log('Request received:', ctx.request.url);
+    
+    // simulate a long-running process
+		await new Promise(resolve => setTimeout(resolve, 1000))
+
+    return { requestTime: new Date() };
+  });
 ```
 
 ## Acknowledgments
