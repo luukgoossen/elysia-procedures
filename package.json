@@ -4,7 +4,7 @@
   "type": "module",
   "author": "Luuk Goossen",
   "license": "MIT",
-  "version": "0.1.0",
+  "version": "0.1.0-alpha.0",
   "description": "tRPC style procedures and actions with TypeBox validation",
   "repository": {
     "type": "git",

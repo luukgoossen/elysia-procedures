@@ -1,2 +1,0 @@
-[install.scopes]
-"@luukgoossen" = { token = "${npm_token}", url = "https://npm.pkg.github.com/" }

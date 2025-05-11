@@ -1,0 +1,59 @@
+name: On Pull Requests to Main
+
+on:
+  pull_request:
+    branches:
+      - 'main'
+    paths:
+      - 'package.json'
+      - 'src/**'
+
+jobs:
+  verify-semver:
+    name: Verify Semantic Versioning
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    
+    steps:
+    - name: Checkout PR branch
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.head_ref }}
+
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v1
+      with:
+        bun-version: latest
+        
+    - name: Install production dependencies
+      run: bun install --production
+      
+    - name: Dry Run Publish
+      run: bun publish --dry-run
+    
+    - name: Get PR package version
+      id: pr_version
+      run: echo "version=$(jq -r .version package.json)" >> $GITHUB_OUTPUT
+    
+    - name: Checkout main branch
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.base_ref }}
+    
+    - name: Get main package version
+      id: main_version
+      run: echo "version=$(jq -r .version package.json)" >> $GITHUB_OUTPUT
+    
+    - name: Compare semantic versions
+      id: semver
+      uses: aleoyakas/check-semver-increased-action@v1
+      with:
+        current-version: ${{ steps.pr_version.outputs.version }}
+        previous-version: ${{ steps.main_version.outputs.version }}
+    
+    - name: Fail if version not bumped
+      if: steps.semver.outputs.is-version-increased != 'true'
+      run: |
+        echo "::error::The version in package.json must be bumped above the main branch version."
+        exit 1
