@@ -1,0 +1,36 @@
+name: Publish
+
+on:
+  push:
+    branches:
+      - 'main'
+    paths:
+      - 'package.json'
+      - 'bun.lockb'
+      - 'README.md'
+      - '.github/workflows/publish.yml'
+
+jobs:
+  publish:
+    name: Publish to Github Packages
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v1
+      with:
+        bun-version: latest
+        
+    - name: Install dependencies
+      run: bun install --production
+      
+    - name: Publish to Github Packages
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: bun publish

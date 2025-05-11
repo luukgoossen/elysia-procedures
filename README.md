@@ -1,6 +1,6 @@
-# TypeBox Procedures
+# Elysia Procedures
 
-A type-safe, composable procedure builder with [TypeBox](https://github.com/sinclairzx81/typebox) validation. Build robust API endpoints with middleware support, input validation, and full TypeScript support. Inspired by tRPC's procedure pattern for end-to-end type safety.
+A type-safe, composable procedure builder for [Elysia](https://elysiajs.com) with [TypeBox](https://github.com/sinclairzx81/typebox) validation. Build robust API endpoints with reusable middleware, input validation, and full TypeScript support. Inspired by tRPC's procedure pattern for end-to-end type safety.
 
 ## Table of Contents
 
@@ -16,6 +16,7 @@ A type-safe, composable procedure builder with [TypeBox](https://github.com/sinc
 
 ## Features
 
+- 🥇 **Elysia** - First class integration with the Elysia framework
 - 🔒 **Type-safe** - Full TypeScript support with inferred types
 - ✅ **Validation** - Built-in schema validation using TypeBox
 - 🧩 **Composable** - Create reusable procedures and middleware
@@ -27,23 +28,23 @@ A type-safe, composable procedure builder with [TypeBox](https://github.com/sinc
 
 ```bash
 # Using npm
-npm install @luukgoossen/typebox-procedures
+npm install @luukgoossen/elysia-procedures
 
 # Using yarn
-yarn add @luukgoossen/typebox-procedures
+yarn add @luukgoossen/elysia-procedures
 
 # Using pnpm
-pnpm add @luukgoossen/typebox-procedures
+pnpm add @luukgoossen/elysia-procedures
 
 # Using bun
-bun add @luukgoossen/typebox-procedures
+bun add @luukgoossen/elysia-procedures
 ```
 
 ## Quick Start
 
 ```typescript
 import { Elysia } from 'elysia';
-import { createProcedure } from '@luukgoossen/typebox-procedures';
+import { createProcedure } from '@luukgoossen/elysia-procedures';
 import { Type } from '@sinclair/typebox';
 
 // Create an authentication middleware procedure
@@ -111,7 +112,7 @@ const user = await getUserAction.run(request, { params, query, body });
 A procedure is a reusable foundation for your API endpoints. It can define common parameters, validation schemas, and middleware.
 
 ```typescript
-import { createProcedure } from '@luukgoossen/typebox-procedures';
+import { createProcedure } from '@luukgoossen/elysia-procedures';
 import { Type } from '@sinclair/typebox';
 
 // Create a basic procedure
@@ -197,7 +198,7 @@ const app = new Elysia()
 This library supports request-level caching to ensure that procedures are executed only once per http request. To enable caching for a procedure, you can supply an array of dependencies to the procedure builder.
 
 ```typescript
-import { createProcedure } from '@luukgoossen/typebox-procedures';
+import { createProcedure } from '@luukgoossen/elysia-procedures';
 import { Type } from '@sinclair/typebox';
 
 // Create a basic procedure
@@ -216,7 +217,7 @@ const baseProcedure = createProcedure('Basic Procedure')
 Any array will enable caching for the procedure, but if input variables might change between different calls to the same procedure for the same request, it is important to include their keys in the array.
 
 ```typescript
-import { createProcedure } from '@luukgoossen/typebox-procedures';
+import { createProcedure } from '@luukgoossen/elysia-procedures';
 import { Type } from '@sinclair/typebox';
 
 // Create a basic procedure

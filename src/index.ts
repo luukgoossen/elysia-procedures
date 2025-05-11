@@ -21,6 +21,5 @@ export type {
 	ActionArgs,
 	ActionBuilder,
 	ActionBuilderArgs,
-	ActionDetails,
 	ActionFn,
 } from './action'
