@@ -41,7 +41,6 @@
     "@elysiajs/opentelemetry": "^1.3.0"
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com/",
-    "access": "restricted"
+    "registry": "https://npm.pkg.github.com/"
   }
 }
