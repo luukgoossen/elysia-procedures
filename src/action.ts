@@ -4,17 +4,10 @@ import { merge, type SafeTObject } from './utils'
 import { record } from '@elysiajs/opentelemetry'
 
 // import types
+import type { DocumentDecoration } from 'elysia'
 import type { TSchema, TObject, Static } from '@sinclair/typebox'
 import type { Promisable } from 'type-fest'
 import type { Context, ProcedureFnArgs, AnyMiddleware } from './procedure'
-
-/**
- * API documentation details for the action.
- */
-export type ActionDetails = Partial<{
-	/** Explaination of what the action does */
-	description: string
-}>
 
 /**
  * Configuration arguments for creating an action builder.
@@ -38,7 +31,7 @@ export type ActionBuilderArgs<
 	/** Name of the action for identification */
 	name: string
 	/** API documentation details for the action */
-	details?: ActionDetails
+	details?: DocumentDecoration
 }
 
 /**
@@ -176,7 +169,7 @@ export class Action<
 	/** Name of the action for identification */
 	name: string
 	/** API documentation details for the action */
-	details?: ActionDetails
+	details?: DocumentDecoration
 	/** TypeBox schema for route parameters */
 	params: Params
 	/** TypeBox schema for query parameters */

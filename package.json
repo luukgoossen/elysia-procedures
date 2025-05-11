@@ -1,5 +1,5 @@
 {
-  "name": "@luukgoossen/typebox-procedures",
+  "name": "@luukgoossen/elysia-procedures",
   "module": "./src/index.ts",
   "type": "module",
   "author": "Luuk Goossen",
@@ -8,7 +8,7 @@
   "description": "tRPC style procedures and actions with TypeBox validation",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/luukgoossen/typebox-procedures.git"
+    "url": "git+https://github.com/luukgoossen/elysia-procedures.git"
   },
   "main": "./src/index.ts",
   "files": [

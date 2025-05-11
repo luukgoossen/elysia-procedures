@@ -3,9 +3,9 @@ import { ActionBuilder } from './action'
 import { merge } from './utils'
 
 // import types
+import type { DocumentDecoration } from 'elysia'
 import type { Static, TObject } from '@sinclair/typebox'
 import type { Merge, Promisable, Simplify } from 'type-fest'
-import type { ActionDetails } from './action'
 import type { SafeTObject } from './utils'
 
 // define a local middleware cache
@@ -252,7 +252,7 @@ export class Procedure<
 	 * @param details - API documentation details for the action
 	 * @returns A new ActionBuilder instance
 	 */
-	public createAction = (name: string, details?: ActionDetails) => {
+	public createAction = (name: string, details?: DocumentDecoration) => {
 		return new ActionBuilder<Ctx, Params, Query, Body, undefined>({
 			params: this.params,
 			query: this.query,
