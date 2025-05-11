@@ -8,6 +8,9 @@ import type { Merge, Promisable, Simplify } from 'type-fest'
 import type { ActionDetails } from './action'
 import type { SafeTObject } from './utils'
 
+// define a local middleware cache
+const cache = new WeakMap<Request, Map<string, any>>()
+
 /**
  * Configuration arguments for creating a procedure.
  */
@@ -98,7 +101,17 @@ export class Middleware<
 	 * @returns - The additional context created by the middleware to be merged into the procedure
 	 */
 	public execute = async (input: ProcedureFnArgs<Ctx, Params, Query, Body>) => {
-		return await this._handler(input)
+		// check if the middleware has already been executed
+		const cached = cache.get(input.ctx.request) ?? new Map()
+		if (cached.has(this.name)) return cached.get(this.name)
+
+		// execute the middleware handler
+		const result = await this._handler(input)
+
+		// store the result in the cache, use null for void results
+		cached.set(this.name, result ?? null)
+		cache.set(input.ctx.request, cached)
+		return result
 	}
 }
 
