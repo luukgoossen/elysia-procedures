@@ -4,7 +4,7 @@
   "type": "module",
   "author": "Luuk Goossen",
   "license": "MIT",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "tRPC style procedures and actions with TypeBox validation",
   "repository": {
     "type": "git",
@@ -13,7 +13,8 @@
   "main": "./src/index.ts",
   "files": [
     "src",
-    "dist"
+    "dist",
+    "tsconfig.json"
   ],
   "exports": {
     ".": "./src/index.ts",
