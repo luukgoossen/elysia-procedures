@@ -13,7 +13,8 @@
   "main": "./src/index.ts",
   "files": [
     "src",
-    "dist"
+    "dist",
+    "tsconfig.json"
   ],
   "exports": {
     ".": "./src/index.ts",
