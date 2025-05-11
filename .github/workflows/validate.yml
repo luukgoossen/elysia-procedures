@@ -30,7 +30,9 @@ jobs:
       run: bun install --production
       
     - name: Dry Run Publish
-      run: bun publish --dry-run
+      run: bun publish --dry-run --registry https://npm.pkg.github.com
+      env:
+        NPM_CONFIG_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     
     - name: Get PR package version
       id: pr_version
@@ -51,6 +53,7 @@ jobs:
       with:
         current-version: ${{ steps.pr_version.outputs.version }}
         previous-version: ${{ steps.main_version.outputs.version }}
+        allow-pre-release: true
     
     - name: Fail if version not bumped
       if: steps.semver.outputs.is-version-increased != 'true'
