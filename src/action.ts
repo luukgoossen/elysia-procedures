@@ -1,6 +1,7 @@
 // import dependencies
 import { Value } from '@sinclair/typebox/value'
 import { merge, type SafeTObject } from './utils'
+import { record } from '@elysiajs/opentelemetry'
 
 // import types
 import type { TSchema, TObject, Static } from '@sinclair/typebox'
@@ -226,7 +227,12 @@ export class Action<
 		params: Params extends TObject ? Static<Params> : any
 		query: Query extends TObject ? Static<Query> : any
 		body: Body extends TObject ? Static<Body> : any
-	}) => {
+	}) => record(`Action: ${this.name}`, {
+		attributes: {
+			type: 'handle',
+			action: this.name,
+		}
+	}, async () => {
 		const { request, params, query, body } = context
 
 		return await this._execute(request, {
@@ -234,7 +240,7 @@ export class Action<
 			query: query,
 			body: body,
 		})
-	}
+	})
 
 	/**
 	 * General handler for the action
@@ -246,24 +252,38 @@ export class Action<
 		params: Params extends TObject ? Static<Params> : any,
 		query: Query extends TObject ? Static<Query> : any,
 		body: Body extends TObject ? Static<Body> : any,
-	}): Promise<Out> => {
-		// validate the params
+	}): Promise<Out> => record(`Action: ${this.name}`, {
+		attributes: {
+			type: 'run',
+			action: this.name,
+		}
+	}, async () => {
 		let params = input.params
-		if (this.params) {
-			params = this.params ? Value.Parse(this.params, input.params) : input.params
-		}
-
-		// validate the query
 		let query = input.query
-		if (this.query) {
-			query = this.query ? Value.Parse(this.query, input.query) : input.query
-		}
-
-		// validate the body
 		let body = input.body
-		if (this.body) {
-			body = this.body ? Value.Parse(this.body, input.body) : input.body
-		}
+
+		// validate the input
+		await record('Validate Inputs', {
+			attributes: {
+				type: 'input',
+				action: this.name,
+			}
+		}, async () => {
+			// validate the params
+			if (this.params) {
+				params = this.params ? Value.Parse(this.params, input.params) : input.params
+			}
+
+			// validate the query
+			if (this.query) {
+				query = this.query ? Value.Parse(this.query, input.query) : input.query
+			}
+
+			// validate the body
+			if (this.body) {
+				body = this.body ? Value.Parse(this.body, input.body) : input.body
+			}
+		})
 
 		// run the action
 		const result = await this._execute(request, {
@@ -272,9 +292,18 @@ export class Action<
 			body
 		})
 
+		// skip the output validation if no output schema is defined
+		if (!this.output) return result
+		const output = this.output
+
 		// validate the output
-		return this.output ? Value.Parse(this.output, result) : result
-	}
+		return record('Validate Output', {
+			attributes: {
+				type: 'output',
+				action: this.name,
+			}
+		}, () => Value.Parse(output, result))
+	}) as Promise<Out>
 
 	private _execute = async (request: Request, input: {
 		params: Params extends TObject ? Static<Params> : any,
@@ -288,16 +317,30 @@ export class Action<
 
 		// run the middlewares
 		for (const middleware of this._middlewares) {
-			const out = await middleware.execute({ params: input.params, query: input.query, body: input.body, ctx })
-			if (out) ctx = { ...ctx, ...out }
+			await record(`Middleware: ${middleware.name}`, {
+				attributes: {
+					type: 'middleware',
+					action: this.name,
+				}
+			}, async () => {
+				const out = await middleware.execute({ params: input.params, query: input.query, body: input.body, ctx })
+				if (out) ctx = { ...ctx, ...out }
+			})
 		}
 
 		// run the action
-		return await this._handler({
-			params: input.params,
-			query: input.query,
-			body: input.body,
-			ctx: ctx as Ctx
+		return await record('Main Handler', {
+			attributes: {
+				type: 'handler',
+				action: this.name,
+			}
+		}, async () => {
+			return await this._handler({
+				params: input.params,
+				query: input.query,
+				body: input.body,
+				ctx: ctx as Ctx
+			})
 		})
 	}
 }
