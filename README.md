@@ -4,6 +4,7 @@ A type-safe, composable procedure builder for [Elysia](https://elysiajs.com) wit
 
 ## Table of Contents
 
+
 - [Features](#features)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
@@ -12,6 +13,7 @@ A type-safe, composable procedure builder for [Elysia](https://elysiajs.com) wit
   - [Adding Schema Validation](#adding-schema-validation)
   - [Creating Actions](#creating-actions)
   - [Integrating with Elysia](#integrating-with-elysia)
+- [Caching](#caching)
 - [Acknowledgments](#acknowledgments)
 
 ## Features
@@ -208,7 +210,7 @@ const baseProcedure = createProcedure('Basic Procedure')
     console.log('Request received:', ctx.request.url);
     
     // simulate a long-running process
-		await new Promise(resolve => setTimeout(resolve, 1000))
+    await new Promise(resolve => setTimeout(resolve, 1000))
 
     return { requestTime: new Date() };
   });
@@ -230,7 +232,7 @@ const baseProcedure = createProcedure('Basic Procedure')
     console.log('Request received:', ctx.request.url);
     
     // simulate a long-running process
-		await new Promise(resolve => setTimeout(resolve, 1000))
+    await new Promise(resolve => setTimeout(resolve, 1000))
 
     return { requestTime: new Date() };
   });
