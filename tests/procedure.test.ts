@@ -101,6 +101,91 @@ describe('Middleware Execution', () => {
 		expect(mockHandler).toHaveBeenCalledWith(input)
 		expect(result).toEqual({ processed: true })
 	})
+
+	test('should apply middleware cache', async () => {
+		const mockHandler = mock(() => ({ processed: true }))
+
+		const procedure = createProcedure('Test Procedure')
+			.params(Type.Object({ id: Type.String() }))
+			.cache(() => [])
+			.build(mockHandler)
+
+		const input = {
+			ctx: { request: new Request('https://example.com') },
+			params: { id: '123' },
+			query: undefined,
+			body: undefined
+		}
+
+		const resultOne = await procedure.middlewares[0]?.execute(input)
+		const resultTwo = await procedure.middlewares[0]?.execute(input)
+
+		expect(mockHandler).toHaveBeenCalledTimes(1)
+		expect(mockHandler).toHaveBeenCalledWith(input)
+		expect(resultOne).toEqual({ processed: true })
+		expect(resultTwo).toEqual({ processed: true })
+	})
+
+	test('should not cache between different requests', async () => {
+		const mockHandler = mock(() => ({ processed: true }))
+
+		const procedure = createProcedure('Test Procedure')
+			.params(Type.Object({ id: Type.String() }))
+			.cache(() => [])
+			.build(mockHandler)
+
+		const inputOne = {
+			ctx: { request: new Request('https://example.com') },
+			params: { id: '123' },
+			query: undefined,
+			body: undefined
+		}
+
+		const inputTwo = {
+			ctx: { request: new Request('https://example.com') },
+			params: { id: '123' },
+			query: undefined,
+			body: undefined
+		}
+
+		const resultOne = await procedure.middlewares[0]?.execute(inputOne)
+		const resultTwo = await procedure.middlewares[0]?.execute(inputTwo)
+
+		expect(mockHandler).toHaveBeenCalledTimes(2)
+		expect(resultOne).toEqual({ processed: true })
+		expect(resultTwo).toEqual({ processed: true })
+	})
+
+	test('should determine cache use by provided keys', async () => {
+		const mockHandler = mock(() => ({ processed: true }))
+
+		const procedure = createProcedure('Test Procedure')
+			.params(Type.Object({ id: Type.String() }))
+			.cache(({ params }) => [params.id])
+			.build(mockHandler)
+
+		const request = new Request('https://example.com')
+		const inputOne = {
+			ctx: { request },
+			params: { id: '123' },
+			query: undefined,
+			body: undefined
+		}
+
+		const inputTwo = {
+			ctx: { request },
+			params: { id: '456' },
+			query: undefined,
+			body: undefined
+		}
+
+		const resultOne = await procedure.middlewares[0]?.execute(inputOne)
+		const resultTwo = await procedure.middlewares[0]?.execute(inputTwo)
+
+		expect(mockHandler).toHaveBeenCalledTimes(2)
+		expect(resultOne).toEqual({ processed: true })
+		expect(resultTwo).toEqual({ processed: true })
+	})
 })
 
 describe('Chained Procedures', () => {

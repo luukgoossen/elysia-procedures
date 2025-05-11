@@ -10,6 +10,7 @@ import type { SafeTObject } from './utils'
 
 // define a local middleware cache
 const cache = new WeakMap<Request, Map<string, any>>()
+const cacheKey = (id: string, array: string[]) => `${id}:[${array.join(',')}]`
 
 /**
  * Configuration arguments for creating a procedure.
@@ -85,13 +86,16 @@ export class Middleware<
 	Body extends TObject | undefined,
 	Next = object | void
 > {
+	private _id: string = crypto.randomUUID()
 	private _handler: ProcedureFn<Ctx, Params, Query, Body, Next>
+	private _keys?: ProcedureFn<Ctx, Params, Query, Body, string[]>
 
 	/** Name of the middleware for identification */
 	name: string
 
-	constructor(handler: ProcedureFn<Ctx, Params, Query, Body, Next>, name: string) {
+	constructor(handler: ProcedureFn<Ctx, Params, Query, Body, Next>, name: string, keys?: ProcedureFn<Ctx, Params, Query, Body, string[]>) {
 		this._handler = handler
+		this._keys = keys
 		this.name = name
 	}
 
@@ -101,15 +105,20 @@ export class Middleware<
 	 * @returns - The additional context created by the middleware to be merged into the procedure
 	 */
 	public execute = async (input: ProcedureFnArgs<Ctx, Params, Query, Body>) => {
+		if (!this._keys) return await this._handler(input)
+
+		// compute a cache key based on the name and input params, query, and body
+		const key = cacheKey(this._id, await this._keys(input))
+
 		// check if the middleware has already been executed
 		const cached = cache.get(input.ctx.request) ?? new Map()
-		if (cached.has(this.name)) return cached.get(this.name)
+		if (cached.has(key)) return cached.get(key)
 
 		// execute the middleware handler
 		const result = await this._handler(input)
 
 		// store the result in the cache, use null for void results
-		cached.set(this.name, result ?? null)
+		cached.set(key, result ?? null)
 		cache.set(input.ctx.request, cached)
 		return result
 	}
@@ -125,7 +134,9 @@ export class ProcedureBuilder<
 	Query extends TObject | undefined,
 	Body extends TObject | undefined
 > {
-	private _state: ProcedureArgs<Params, Query, Body>
+	private _state: ProcedureArgs<Params, Query, Body> & {
+		keys?: ProcedureFn<Ctx, Params, Query, Body, string[]>
+	}
 
 	constructor(base: ProcedureArgs<Params, Query, Body>) {
 		this._state = base
@@ -142,7 +153,9 @@ export class ProcedureBuilder<
 		Q extends TObject | undefined,
 		B extends TObject | undefined
 	>(
-		changes: Partial<ProcedureArgs<P, Q, B>>
+		changes: Partial<ProcedureArgs<P, Q, B> & {
+			keys?: ProcedureFn<Ctx, Params, Query, Body, string[]>
+		}>
 	): ProcedureBuilder<Ctx, P, Q, B> => {
 		return new ProcedureBuilder<Ctx, P, Q, B>({
 			...this._state,
@@ -184,13 +197,19 @@ export class ProcedureBuilder<
 	}
 
 	/**
-	 * Builds this procedure with the given handler function.
-	 * @param handler - The function to execute when this procedure is called
-	 * @returns A built procedure with the given handler
+	 * Adds cache keys to the procedure.
+	 * @param keys - The function to compute the cache keys
 	 */
+	public cache = (keys: ProcedureFn<Ctx, Params, Query, Body, string[]>) => this._apply<Params, Query, Body>({ keys })
+
+	/**
+		 * Builds this procedure with the given handler function.
+		 * @param handler - The function to execute when this procedure is called
+		 * @returns A built procedure with the given handler
+		 */
 	public build = <Next extends object | void>(handler?: ProcedureFn<Ctx, Params, Query, Body, Next>) => {
 		if (handler) {
-			const middleware = new Middleware<Ctx, Params, Query, Body, Next>(handler, this._state.name)
+			const middleware = new Middleware<Ctx, Params, Query, Body, Next>(handler, this._state.name, this._state.keys)
 			this._state.middlewares = [...this._state.middlewares, middleware]
 		}
 
