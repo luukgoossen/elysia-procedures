@@ -4,7 +4,6 @@ A type-safe, composable procedure builder for [Elysia](https://elysiajs.com) wit
 
 ## Table of Contents
 
-
 - [Features](#features)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
@@ -12,7 +11,7 @@ A type-safe, composable procedure builder for [Elysia](https://elysiajs.com) wit
   - [Creating a Basic Procedure](#creating-a-basic-procedure)
   - [Adding Schema Validation](#adding-schema-validation)
   - [Creating Actions](#creating-actions)
-  - [Integrating with Elysia](#integrating-with-elysia)
+- [Integrating with Elysia](#integrating-with-elysia)
 - [Caching](#caching)
 - [Acknowledgments](#acknowledgments)
 
@@ -45,61 +44,67 @@ bun add @luukgoossen/elysia-procedures
 ## Quick Start
 
 ```typescript
-import { Elysia } from 'elysia';
-import { createProcedure } from '@luukgoossen/elysia-procedures';
-import { Type } from '@sinclair/typebox';
+import { Elysia } from "elysia";
+import { createProcedure } from "@luukgoossen/elysia-procedures";
+import { Type } from "@sinclair/typebox";
 
 // Create an authentication middleware procedure
-const authProcedure = createProcedure('Ensure Auth')
-  .build(async ({ ctx }) => {
-    // Check auth header
-    const authHeader = ctx.request.headers.get('Authorization');
-    if (!authHeader) {
-      throw new Error('Unauthorized');
-    }
-    
-    // Return user data to be added to context
-    return {
-      user: {
-        id: '123',
-        name: 'John Doe',
-        role: 'admin'
-      }
-    };
-  });
+const authProcedure = createProcedure("Ensure Auth").build(async ({ ctx }) => {
+  // Check auth header
+  const authHeader = ctx.request.headers.get("Authorization");
+  if (!authHeader) {
+    throw new Error("Unauthorized");
+  }
+
+  // Return user data to be added to context
+  return {
+    user: {
+      id: "123",
+      name: "John Doe",
+      role: "admin",
+    },
+  };
+});
 
 // Create a procedure that requires authentication
-const userProcedure = createProcedure('With User Profile', authProcedure)
-  .params(Type.Object({
-    userId: Type.String()
-  }))
-  .query(Type.Object({
-    include: Type.Optional(Type.String())
-  }))
+const userProcedure = createProcedure("With User Profile", authProcedure)
+  .params(
+    Type.Object({
+      userId: Type.String(),
+    })
+  )
+  .query(
+    Type.Object({
+      include: Type.Optional(Type.String()),
+    })
+  )
   .build(({ ctx, params, query }) => {
     // ctx.user is available because of the auth middleware
     console.log(`User ${ctx.user.name} is accessing profile ${params.userId}`);
-    
+
     return {
-      success: true
+      success: true,
     };
   });
 
 // Create an API endpoint action with our procedure
-const getUserAction = userProcedure.createAction('Get User')
-  .output(Type.Object({
-    id: Type.String(),
-    name: Type.String(),
-    email: Type.String(),
-    role: Type.String()
-  }))
+const getUserAction = userProcedure
+  .createAction("Get User")
+  .output(
+    Type.Object({
+      id: Type.String(),
+      name: Type.String(),
+      email: Type.String(),
+      role: Type.String(),
+    })
+  )
   .build(({ ctx, params }) => {
     // Fetch user data based on params.userId
     return {
       id: params.userId,
-      name: 'Jane Doe',
-      email: 'jane@example.com',
-      role: 'user'
+      name: "Jane Doe",
+      email: "jane@example.com",
+      role: "user",
     };
   });
 
@@ -114,15 +119,14 @@ const user = await getUserAction.run(request, { params, query, body });
 A procedure is a reusable foundation for your API endpoints. It can define common parameters, validation schemas, and middleware.
 
 ```typescript
-import { createProcedure } from '@luukgoossen/elysia-procedures';
-import { Type } from '@sinclair/typebox';
+import { createProcedure } from "@luukgoossen/elysia-procedures";
+import { Type } from "@sinclair/typebox";
 
 // Create a basic procedure
-const baseProcedure = createProcedure('Basic Procedure')
-  .build(({ ctx }) => {
-    console.log('Request received:', ctx.request.url);
-    return { requestTime: new Date() };
-  });
+const baseProcedure = createProcedure("Basic Procedure").build(({ ctx }) => {
+  console.log("Request received:", ctx.request.url);
+  return { requestTime: new Date() };
+});
 ```
 
 ### Adding Schema Validation
@@ -130,23 +134,31 @@ const baseProcedure = createProcedure('Basic Procedure')
 You can add TypeBox schemas to validate parameters, query strings, and request bodies:
 
 ```typescript
-const productProcedure = createProcedure('Ensure Product', baseProcedure)
-  .params(Type.Object({
-    productId: Type.String()
-  }))
-  .query(Type.Object({
-    currency: Type.Optional(Type.String({ default: 'USD' })),
-    format: Type.Optional(Type.Enum({ json: 'json', xml: 'xml' }))
-  }))
-  .body(Type.Object({
-    includeDetails: Type.Boolean()
-  }))
+const productProcedure = createProcedure("Ensure Product", baseProcedure)
+  .params(
+    Type.Object({
+      productId: Type.String(),
+    })
+  )
+  .query(
+    Type.Object({
+      currency: Type.Optional(Type.String({ default: "USD" })),
+      format: Type.Optional(Type.Enum({ json: "json", xml: "xml" })),
+    })
+  )
+  .body(
+    Type.Object({
+      includeDetails: Type.Boolean(),
+    })
+  )
   .build(({ params, query, body, ctx }) => {
     // All inputs are validated and typed
-    console.log(`Fetching product ${params.productId} in ${query.currency} format`);
-    
+    console.log(
+      `Fetching product ${params.productId} in ${query.currency} format`
+    );
+
     return {
-      productDetails: true
+      productDetails: true,
     };
   });
 ```
@@ -156,42 +168,53 @@ const productProcedure = createProcedure('Ensure Product', baseProcedure)
 Actions represent the actual API endpoints built from procedures:
 
 ```typescript
-const getProductAction = productProcedure.createAction('Get Product')
-  .output(Type.Object({
-    id: Type.String(),
-    name: Type.String(),
-    price: Type.Number(),
-    details: Type.Optional(Type.Object({
-      description: Type.String(),
-      specifications: Type.Array(Type.String())
-    }))
-  }))
+const getProductAction = productProcedure
+  .createAction("Get Product")
+  .output(
+    Type.Object({
+      id: Type.String(),
+      name: Type.String(),
+      price: Type.Number(),
+      details: Type.Optional(
+        Type.Object({
+          description: Type.String(),
+          specifications: Type.Array(Type.String()),
+        })
+      ),
+    })
+  )
   .build(({ params, query, body, ctx }) => {
     // Fetch product from database
     return {
       id: params.productId,
-      name: 'Amazing Product',
+      name: "Amazing Product",
       price: 99.99,
-      details: body.includeDetails ? {
-        description: 'This is an amazing product',
-        specifications: ['Spec 1', 'Spec 2']
-      } : undefined
+      details: body.includeDetails
+        ? {
+            description: "This is an amazing product",
+            specifications: ["Spec 1", "Spec 2"],
+          }
+        : undefined,
     };
   });
 ```
 
-### Integrating with Elysia
+## Integrating with Elysia
 
 This library has first class support for integrating with the Elysia framework through the action.handle function, which expects an Elysia context, and action.docs which returns Elysia-formatted documentation defining the input and output schemas in a type-safe way.
 
 It also hooks into Elysia's OpenTelemetry plugin to add tracing to procedure and action runs, providing step by step information about the executed chain.
 
 ```typescript
-import { Elysia } from 'elysia';
+import { Elysia } from "elysia";
 
 const app = new Elysia()
-  .get('/products/:productId', getProductAction.handle, { ...getProductAction.docs, tags: ['Product'] })
-  .post('/products/:productId/update', updateProductAction.handle, { ...updateProductAction.docs, tags: ['Product'] })
+  .get("/products/:productId", getProductAction.handle, getProductAction.docs)
+  .post(
+    "/products/:productId/update",
+    updateProductAction.handle,
+    updateProductAction.docs
+  )
   .listen(3000);
 ```
 
@@ -200,17 +223,17 @@ const app = new Elysia()
 This library supports request-level caching to ensure that procedures are executed only once per http request. To enable caching for a procedure, you can supply an array of dependencies to the procedure builder.
 
 ```typescript
-import { createProcedure } from '@luukgoossen/elysia-procedures';
-import { Type } from '@sinclair/typebox';
+import { createProcedure } from "@luukgoossen/elysia-procedures";
+import { Type } from "@sinclair/typebox";
 
 // Create a basic procedure
-const baseProcedure = createProcedure('Basic Procedure')
+const baseProcedure = createProcedure("Basic Procedure")
   .cache(() => [])
   .build(async ({ ctx }) => {
-    console.log('Request received:', ctx.request.url);
-    
+    console.log("Request received:", ctx.request.url);
+
     // simulate a long-running process
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    await new Promise((resolve) => setTimeout(resolve, 1000));
 
     return { requestTime: new Date() };
   });
@@ -219,20 +242,22 @@ const baseProcedure = createProcedure('Basic Procedure')
 Any array will enable caching for the procedure, but if input variables might change between different calls to the same procedure for the same request, it is important to include their keys in the array.
 
 ```typescript
-import { createProcedure } from '@luukgoossen/elysia-procedures';
-import { Type } from '@sinclair/typebox';
+import { createProcedure } from "@luukgoossen/elysia-procedures";
+import { Type } from "@sinclair/typebox";
 
 // Create a basic procedure
-const baseProcedure = createProcedure('Basic Procedure')
-  .params(Type.Object({
-    productId: Type.String()
-  }))
+const baseProcedure = createProcedure("Basic Procedure")
+  .params(
+    Type.Object({
+      productId: Type.String(),
+    })
+  )
   .cache(({ params }) => [params.productId])
   .build(async ({ ctx }) => {
-    console.log('Request received:', ctx.request.url);
-    
+    console.log("Request received:", ctx.request.url);
+
     // simulate a long-running process
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    await new Promise((resolve) => setTimeout(resolve, 1000));
 
     return { requestTime: new Date() };
   });
