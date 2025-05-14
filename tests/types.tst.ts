@@ -217,6 +217,69 @@ describe('Chained Procedure Type Inference', () => {
 		expect(derivedProcedure.query).type.toBeUndefined()
 		expect(derivedProcedure.body).type.toBeUndefined()
 	})
+
+	test('should handle complex inference chains', () => {
+		const firstProcedure = createProcedure('First Procedure')
+			.params(Type.Object({ first: Type.String() }))
+			.build(({params}) => ({ first: params.first }))
+
+		const secondProcedure = createProcedure('Second Procedure', firstProcedure)
+			.query(Type.Object({ second: Type.String() }))
+			.build(({query}) => ({ second: query.second }))
+
+		const thirdProcedure = createProcedure('Third Procedure', secondProcedure)
+			.body(Type.Object({ third: Type.String() }))
+			.build(({body}) => ({ third: body.third }))
+
+		const forthProcedure = createProcedure('Forth Procedure', thirdProcedure)
+			.params(Type.Object({ forth: Type.String() }))
+			.build(({params}) => ({ forth: params.forth }))
+
+		const fifthProcedure = createProcedure('Fifth Procedure', forthProcedure)
+			.query(Type.Object({ fifth: Type.String() }))
+			.build(({query}) => ({ fifth: query.fifth }))
+
+		const sixthProcedure = createProcedure('Sixth Procedure', fifthProcedure)
+			.body(Type.Object({ sixth: Type.String() }))
+			.build(({body}) => ({ sixth: body.sixth }))
+
+		const seventhProcedure = createProcedure('Seventh Procedure', sixthProcedure)
+			.params(Type.Object({ seventh: Type.String() }))
+			.build(({params}) => ({ seventh: params.seventh }))
+
+		const eighthProcedure = createProcedure('Eighth Procedure', seventhProcedure)
+			.query(Type.Object({ eighth: Type.String() }))
+			.build(({query}) => ({ eighth: query.eighth }))
+
+		const ninethProcedure = createProcedure('Nineth Procedure', eighthProcedure)
+			.body(Type.Object({ nineth: Type.String() }))
+			.build(({body}) => ({ nineth: body.nineth }))
+
+		expect(ninethProcedure).type.toBe<Procedure<{
+			request: Request;
+			first: string;
+			second: string;
+			third: string;
+			forth: string;
+			fifth: string;
+			sixth: string;
+			seventh: string;
+			eighth: string;
+			nineth: string;
+		}, TObject<{
+			seventh: TString;
+			forth: TString;
+			first: TString;
+		}>, TObject<{
+			eighth: TString;
+			fifth: TString;
+			second: TString;
+		}>, TObject<{
+			nineth: TString;
+			sixth: TString;
+			third: TString;
+		}>>>()
+	})
 })
 
 describe('Action Inference', () => {

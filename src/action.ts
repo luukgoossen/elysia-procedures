@@ -1,13 +1,14 @@
 // import dependencies
 import { Value } from '@sinclair/typebox/value'
-import { merge, type SafeTObject } from './utils'
+import { merge } from './utils'
 import { record } from '@elysiajs/opentelemetry'
 
 // import types
 import type { DocumentDecoration } from 'elysia'
 import type { TSchema, TObject, Static } from '@sinclair/typebox'
 import type { Promisable } from 'type-fest'
-import type { Context, ProcedureFnArgs, AnyMiddleware } from './procedure'
+import type { ProcedureFnArgs, AnyMiddleware } from './procedure'
+import type { Context, SafeTObject, MergedObject } from './utils'
 
 /**
  * Configuration arguments for creating an action builder.
@@ -103,7 +104,7 @@ export class ActionBuilder<
 	 */
 	public params = <T extends TObject>(params: SafeTObject<T, Params>) => {
 		const mergedParams = merge(this._state.params, params)
-		return this._apply<typeof mergedParams, Query, Body, Output>({
+		return this._apply<MergedObject<SafeTObject<T, Params>, Params>, Query, Body, Output>({
 			params: mergedParams
 		})
 	}
@@ -114,7 +115,7 @@ export class ActionBuilder<
 	 */
 	public query = <T extends TObject>(query: SafeTObject<T, Query>) => {
 		const mergedQuery = merge(this._state.query, query)
-		return this._apply<Params, typeof mergedQuery, Body, Output>({
+		return this._apply<Params, MergedObject<SafeTObject<T, Query>, Query>, Body, Output>({
 			query: mergedQuery
 		})
 	}
@@ -125,7 +126,7 @@ export class ActionBuilder<
 	 */
 	public body = <T extends TObject>(body: SafeTObject<T, Body>) => {
 		const mergedBody = merge(this._state.body, body)
-		return this._apply<Params, Query, typeof mergedBody, Output>({
+		return this._apply<Params, Query, MergedObject<SafeTObject<T, Body>, Body>, Output>({
 			body: mergedBody
 		})
 	}

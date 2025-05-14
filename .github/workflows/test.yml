@@ -7,7 +7,7 @@ on:
 
 jobs:
   test:
-    name: Run Linting and Tests
+    name: Run Linting, Tests and build
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -52,9 +52,15 @@ jobs:
         run: bun run tstyche
 
       - name: Test if the project builds
-        if: always()
         id: build
         run: bun run build
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Build Output
+          path: ./dist
+          retention-days: 1
 
       - name: Generate Summary
         if: always()
