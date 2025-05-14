@@ -42,3 +42,8 @@ jobs:
         run: bun publish --registry https://npm.pkg.github.com
         env:
           NPM_CONFIG_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish to NPM Packages
+        run: bun publish
+        env:
+          NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
