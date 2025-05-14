@@ -7,7 +7,8 @@ const defaultBuildConfig: BuildConfig = {
 	target: 'node',
 	splitting: true,
 	packages: 'external',
-	env: 'disable'
+	env: 'disable',
+	minify: true,
 }
 
 await Promise.all([
