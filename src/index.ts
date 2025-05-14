@@ -6,7 +6,6 @@ export {
 } from './procedure'
 
 export type {
-	Context,
 	Middleware,
 	Procedure,
 } from './procedure'
@@ -14,3 +13,7 @@ export type {
 export type {
 	Action
 } from './action'
+
+export type {
+	Context
+} from './utils'

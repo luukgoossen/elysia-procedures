@@ -5,8 +5,8 @@ import { merge } from './utils'
 // import types
 import type { DocumentDecoration } from 'elysia'
 import type { Static, TObject } from '@sinclair/typebox'
-import type { Merge, Promisable, Simplify } from 'type-fest'
-import type { SafeTObject } from './utils'
+import type { Promisable, Simplify } from 'type-fest'
+import type { Context, SafeTObject, MergedObject, MergedContext } from './utils'
 
 // define a local middleware cache
 const cache = new WeakMap<Request, Map<string, any>>()
@@ -66,14 +66,6 @@ export type ProcedureFn<
  * Type alias for any middleware type.
  */
 export type AnyMiddleware = Middleware<any, any, any, any>
-
-/**
- * Base context available in all procedures.
- */
-export type Context = {
-	/** The received HTTP request */
-	request: Request
-}
 
 /**
  * Middleware class representing a function to run during request processing.
@@ -169,7 +161,7 @@ export class ProcedureBuilder<
 	 */
 	public params = <T extends TObject>(params: SafeTObject<T, Params>) => {
 		const mergedParams = merge(this._state.params, params)
-		return this._apply<typeof mergedParams, Query, Body>({
+		return this._apply<MergedObject<SafeTObject<T, Params>, Params>, Query, Body>({
 			params: mergedParams
 		})
 	}
@@ -180,7 +172,7 @@ export class ProcedureBuilder<
 	 */
 	public query = <T extends TObject>(query: SafeTObject<T, Query>) => {
 		const mergedQuery = merge(this._state.query, query)
-		return this._apply<Params, typeof mergedQuery, Body>({
+		return this._apply<Params, MergedObject<SafeTObject<T, Query>, Query>, Body>({
 			query: mergedQuery
 		})
 	}
@@ -191,7 +183,7 @@ export class ProcedureBuilder<
 	 */
 	public body = <T extends TObject>(body: SafeTObject<T, Body>) => {
 		const mergedBody = merge(this._state.body, body)
-		return this._apply<Params, Query, typeof mergedBody>({
+		return this._apply<Params, Query, MergedObject<SafeTObject<T, Body>, Body>>({
 			body: mergedBody
 		})
 	}
@@ -207,13 +199,13 @@ export class ProcedureBuilder<
 		 * @param handler - The function to execute when this procedure is called
 		 * @returns A built procedure with the given handler
 		 */
-	public build = <Next extends object | void>(handler?: ProcedureFn<Ctx, Params, Query, Body, Next>) => {
+	public build = <Next extends object | void>(handler?: ProcedureFn<Ctx, Params, Query, Body, Next>): Procedure<MergedContext<Ctx, Next>, Params, Query, Body> => {
 		if (handler) {
 			const middleware = new Middleware<Ctx, Params, Query, Body, Next>(handler, this._state.name, this._state.keys)
 			this._state.middlewares = [...this._state.middlewares, middleware]
 		}
 
-		return new Procedure<Simplify<Context & Merge<Ctx, Next extends object ? Next : unknown>>, Params, Query, Body>(this._state)
+		return new Procedure<MergedContext<Ctx, Next>, Params, Query, Body>(this._state)
 	}
 }
 

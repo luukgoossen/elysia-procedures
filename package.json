@@ -3,7 +3,7 @@
   "type": "module",
   "author": "Luuk Goossen",
   "license": "MIT",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -29,9 +29,21 @@
     "dist"
   ],
   "exports": {
-    "types": "./dist/index.d.ts",
-    "import": "./dist/index.js",
-    "require": "./dist/index.cjs"
+    ".": {
+      "require": "./dist/index.cjs",
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./action": {
+      "require": "./dist/action.cjs",
+      "import": "./dist/action.js",
+      "types": "./dist/action.d.ts"
+    },
+    "./procedure": {
+      "require": "./dist/procedure.cjs",
+      "import": "./dist/procedure.js",
+      "types": "./dist/procedure.d.ts"
+    }
   },
   "scripts": {
     "build": "bun build.ts",
