@@ -4,6 +4,7 @@ import { Type } from '@sinclair/typebox'
 // import types
 import type { TObject } from '@sinclair/typebox'
 import type { Merge, Simplify } from 'type-fest'
+import type { Cookie } from 'elysia'
 
 /**
  * Merges two TypeBox object schemas into one.
@@ -27,6 +28,7 @@ export const merge = <
 export type Context = {
 	/** The received HTTP request */
 	request: Request
+	cookie: Record<string, Cookie<string | undefined>>
 }
 
 /**

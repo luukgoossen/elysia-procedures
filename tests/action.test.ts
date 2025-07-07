@@ -166,6 +166,7 @@ describe('Action Execution', () => {
 
 		const result = await action.handle({
 			request: new Request('https://example.com'),
+			cookie: {},
 			params: { id: '123' },
 			query: undefined,
 			body: undefined
@@ -189,6 +190,7 @@ describe('Action Execution', () => {
 
 		const result = await action.handle({
 			request: new Request('https://example.com'),
+			cookie: {},
 			params: { id: '123' },
 			query: undefined,
 			body: undefined
@@ -220,7 +222,10 @@ describe('Input and Output Validation', () => {
 			body: undefined
 		}
 
-		const result = await action.run(new Request('https://example.com'), input)
+		const result = await action.run({
+			request: new Request('https://example.com'),
+			cookie: {}
+		}, input)
 		expect(result).toEqual({ result: '123-42' })
 
 		// invalid parameter should throw
@@ -233,8 +238,11 @@ describe('Input and Output Validation', () => {
 			body: undefined
 		}
 
+		await expect(action.run({
+			request: new Request('https://example.com'),
+			cookie: {}
 		// @ts-expect-error we want this test to cause a type error
-		await expect(action.run(new Request('https://example.com'), invalidInput))
+		}, invalidInput))
 			.rejects.toThrow()
 	})
 
@@ -253,7 +261,10 @@ describe('Input and Output Validation', () => {
 				extraField: 'should be removed'
 			}))
 
-		const result = await action.run(new Request('https://example.com'), {
+		const result = await action.run({
+			request: new Request('https://example.com'),
+			cookie: {}
+		}, {
 			params: undefined,
 			query: undefined,
 			body: undefined
@@ -277,7 +288,10 @@ describe('Input and Output Validation', () => {
 				count: 42
 			}))
 
-		await expect(action.run(new Request('https://example.com'), {
+		await expect(action.run({
+			request: new Request('https://example.com'),
+			cookie: {}
+		}, {
 			params: undefined,
 			query: undefined,
 			body: undefined
@@ -318,7 +332,10 @@ describe('Action with complex schemas', () => {
 			}
 		}
 
-		const result = await action.run(new Request('https://example.com'), {
+		const result = await action.run({
+			request: new Request('https://example.com'),
+			cookie: {}
+		}, {
 			params: {},
 			query: {},
 			body: userData
