@@ -216,8 +216,7 @@ export class Action<
 	 * @param context The Elysia context
 	 * @returns
 	 */
-	public handle = async (context: {
-		request: Request
+	public handle = async (context: Context & {
 		params: Params extends TObject ? Static<Params> : any
 		query: Query extends TObject ? Static<Query> : any
 		body: Body extends TObject ? Static<Body> : any
@@ -227,9 +226,9 @@ export class Action<
 			action: this.name,
 		}
 	}, async () => {
-		const { request, params, query, body } = context
+		const { params, query, body, ...ctx } = context
 
-		return await this._execute(request, {
+		return await this._execute(ctx, {
 			params: params,
 			query: query,
 			body: body,
@@ -242,7 +241,7 @@ export class Action<
 	 * @param input The inputs for the action
 	 * @returns
 	 */
-	public run = async (request: Request, input: {
+	public run = async (ctx: Context, input: {
 		params: Params extends TObject ? Static<Params> : any,
 		query: Query extends TObject ? Static<Query> : any,
 		body: Body extends TObject ? Static<Body> : any,
@@ -280,7 +279,7 @@ export class Action<
 		})
 
 		// run the action
-		const result = await this._execute(request, {
+		const result = await this._execute(ctx, {
 			params,
 			query,
 			body
@@ -299,15 +298,11 @@ export class Action<
 		}, () => Value.Parse(output, result))
 	}) as Promise<Out>
 
-	private _execute = async (request: Request, input: {
+	private _execute = async (ctx: Context, input: {
 		params: Params extends TObject ? Static<Params> : any,
 		query: Query extends TObject ? Static<Query> : any,
 		body: Body extends TObject ? Static<Body> : any,
 	}): Promise<Out> => {
-		// create the base context
-		let ctx = {
-			request
-		}
 
 		// run the middlewares
 		for (const middleware of this._middlewares) {

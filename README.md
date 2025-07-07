@@ -109,7 +109,7 @@ const getUserAction = userProcedure
   });
 
 // Get the result of the action
-const user = await getUserAction.run(request, { params, query, body });
+const user = await getUserAction.run(context, { params, query, body });
 ```
 
 ## Usage
