@@ -29,6 +29,22 @@ describe('Action Builder', () => {
 		const docs = action.docs
 		expect(docs).toBeDefined()
 		expect(docs.detail?.summary).toBe('Test Action')
+		expect(docs.detail?.operationId).toBe('testAction')
+		expect(docs.detail?.description).toBe('Test action description')
+	})
+
+	test('should allow overriding OpenAPI documentation', () => {
+		const procedure = createProcedure('Test Procedure').build()
+		const action = procedure.createAction('Test Action', {
+			description: 'Test action description',
+			operationId: 'testActionOverride',
+			summary: 'Overridden Action Summary'
+		}).build(() => { })
+
+		const docs = action.docs
+		expect(docs).toBeDefined()
+		expect(docs.detail?.summary).toBe('Overridden Action Summary')
+		expect(docs.detail?.operationId).toBe('testActionOverride')
 		expect(docs.detail?.description).toBe('Test action description')
 	})
 })

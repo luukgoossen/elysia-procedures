@@ -1,6 +1,6 @@
 // import dependencies
 import { Value } from '@sinclair/typebox/value'
-import { merge } from './utils'
+import { merge, toCamelCase } from './utils'
 import { record } from '@elysiajs/opentelemetry'
 
 // import types
@@ -203,6 +203,7 @@ export class Action<
 			response: this.output,
 			detail: {
 				summary: this.name,
+				operationId: toCamelCase(this.name),
 				...this.details
 			},
 		}
