@@ -6,6 +6,12 @@ import type { TObject } from '@sinclair/typebox'
 import type { Merge, Simplify } from 'type-fest'
 import type { Cookie } from 'elysia'
 
+/** Converts a string from Title Case to camelCase */
+export const toCamelCase = (str: string): string =>
+	str
+		.replace(/(?:^\w|[A-Z]|\b\w)/g, (match, index) => index === 0 ? match.toLowerCase() : match.toUpperCase())
+		.replace(/\s+/g, '')
+
 /**
  * Merges two TypeBox object schemas into one.
  * The next schema's properties will override the previous schema's properties.
