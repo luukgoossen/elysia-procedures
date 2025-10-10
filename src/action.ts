@@ -221,12 +221,13 @@ export class Action<
 		query: Query extends TObject ? Static<Query> : any
 		body: Body extends TObject ? Static<Body> : any
 	}) => trace({
-		name: this.name,
+		name: this.details?.tracing?.name ?? this.name,
 		op: 'procedure.action',
 		startTime: performance.timeOrigin + performance.now(),
 		attributes: {
 			'procedure.type': 'action',
 			'procedure.name': this.name,
+			...this.details?.tracing?.attributes
 		}
 	}, async span => {
 		const { params, query, body, ...ctx } = context
@@ -252,12 +253,13 @@ export class Action<
 		query: Query extends TObject ? Static<Query> : any,
 		body: Body extends TObject ? Static<Body> : any,
 	}): Promise<Out> => trace({
-		name: this.name,
+		name: this.details?.tracing?.name ?? this.name,
 		op: 'procedure.action',
 		startTime: performance.timeOrigin + performance.now(),
 		attributes: {
 			'procedure.type': 'action',
 			'procedure.name': this.name,
+			...this.details?.tracing?.attributes
 		}
 	}, async span => {
 		let params = input.params
@@ -266,7 +268,7 @@ export class Action<
 
 		// validate the input
 		await trace({
-			name: `${this.name}: Validate Input`,
+			name: this.details?.tracing?.name ?? this.name,
 			op: 'procedure.input',
 			startTime: performance.timeOrigin + performance.now(),
 			attributes: {
@@ -307,7 +309,7 @@ export class Action<
 
 		// validate the output
 		const output = await trace({
-			name: `${this.name}: Validate Output`,
+			name: this.details?.tracing?.name ?? this.name,
 			op: 'procedure.output',
 			startTime: performance.timeOrigin + performance.now(),
 			attributes: {
@@ -334,7 +336,7 @@ export class Action<
 		// run the middlewares
 		for (const middleware of this._middlewares) {
 			await trace({
-				name: `Middleware: ${middleware.name}`,
+				name: middleware.config.tracing?.name ?? middleware.name,
 				op: 'procedure.middleware',
 				startTime: performance.timeOrigin + performance.now(),
 				attributes: {
@@ -352,7 +354,7 @@ export class Action<
 
 		// run the action
 		return await trace({
-			name: `${this.name}: Handler`,
+			name: this.details?.tracing?.name ?? this.name,
 			op: 'procedure.handler',
 			startTime: performance.timeOrigin + performance.now(),
 			attributes: {
