@@ -1,7 +1,7 @@
 // import dependencies
 import { Value } from '@sinclair/typebox/value'
 import { merge, toCamelCase } from './utils'
-import { record } from '@elysiajs/opentelemetry'
+import { trace } from './trace'
 
 // import types
 import type { TSchema, TObject, Static } from '@sinclair/typebox'
@@ -220,21 +220,25 @@ export class Action<
 		params: Params extends TObject ? Static<Params> : any
 		query: Query extends TObject ? Static<Query> : any
 		body: Body extends TObject ? Static<Body> : any
-	}) => record(this.name, {
+	}) => trace({
+		name: this.name,
+		op: 'procedure.action',
 		startTime: performance.timeOrigin + performance.now(),
 		attributes: {
-			'span.op': 'procedure.action',
 			'procedure.type': 'action',
 			'procedure.name': this.name,
 		}
-	}, async () => {
+	}, async span => {
 		const { params, query, body, ...ctx } = context
 
-		return await this._execute(ctx, {
+		const result = await this._execute(ctx, {
 			params: params,
 			query: query,
 			body: body,
 		})
+
+		span?.end(performance.timeOrigin + performance.now())
+		return result
 	})
 
 	/**
@@ -247,27 +251,29 @@ export class Action<
 		params: Params extends TObject ? Static<Params> : any,
 		query: Query extends TObject ? Static<Query> : any,
 		body: Body extends TObject ? Static<Body> : any,
-	}): Promise<Out> => record(this.name, {
+	}): Promise<Out> => trace({
+		name: this.name,
+		op: 'procedure.action',
 		startTime: performance.timeOrigin + performance.now(),
 		attributes: {
-			'span.op': 'procedure.action',
 			'procedure.type': 'action',
 			'procedure.name': this.name,
 		}
-	}, async () => {
+	}, async span => {
 		let params = input.params
 		let query = input.query
 		let body = input.body
 
 		// validate the input
-		await record(`${this.name}: Validate Input`, {
+		await trace({
+			name: `${this.name}: Validate Input`,
+			op: 'procedure.input',
 			startTime: performance.timeOrigin + performance.now(),
 			attributes: {
-				'span.op': 'procedure.input',
 				'procedure.type': 'input',
 				'procedure.name': this.name,
 			}
-		}, async () => {
+		}, span => {
 			// validate the params
 			if (this.params) {
 				params = this.params ? Value.Parse(this.params, input.params) : input.params
@@ -282,6 +288,8 @@ export class Action<
 			if (this.body) {
 				body = this.body ? Value.Parse(this.body, input.body) : input.body
 			}
+
+			span?.end(performance.timeOrigin + performance.now())
 		})
 
 		// run the action
@@ -292,18 +300,29 @@ export class Action<
 		})
 
 		// skip the output validation if no output schema is defined
-		if (!this.output) return result
-		const output = this.output
+		if (!this.output) {
+			span?.end(performance.timeOrigin + performance.now())
+			return result
+		}
 
 		// validate the output
-		return record(`${this.name}: Validate Output`, {
+		const output = await trace({
+			name: `${this.name}: Validate Output`,
+			op: 'procedure.output',
 			startTime: performance.timeOrigin + performance.now(),
 			attributes: {
-				'span.op': 'procedure.output',
 				'procedure.type': 'output',
 				'procedure.name': this.name,
 			}
-		}, () => Value.Parse(output, result))
+		}, span => {
+			const output = Value.Parse(this.output!, result)
+
+			span?.end(performance.timeOrigin + performance.now())
+			return output
+		})
+
+		span?.end(performance.timeOrigin + performance.now())
+		return output
 	}) as Promise<Out>
 
 	private _execute = async (ctx: Context, input: {
@@ -314,36 +333,43 @@ export class Action<
 
 		// run the middlewares
 		for (const middleware of this._middlewares) {
-			await record(middleware.name, {
+			await trace({
+				name: `Middleware: ${middleware.name}`,
+				op: 'procedure.middleware',
 				startTime: performance.timeOrigin + performance.now(),
 				attributes: {
-					'span.op': 'procedure.middleware',
 					'procedure.type': 'middleware',
 					'procedure.name': middleware.name,
 					...middleware.config.tracing?.attributes
 				}
-			}, async () => {
+			}, async span => {
 				const out = await middleware.execute({ params: input.params, query: input.query, body: input.body, ctx })
 				if (out) ctx = { ...ctx, ...out }
+				
+				span?.end(performance.timeOrigin + performance.now())
 			})
 		}
 
 		// run the action
-		return await record(`${this.name}: Handler`, {
+		return await trace({
+			name: `${this.name}: Handler`,
+			op: 'procedure.handler',
 			startTime: performance.timeOrigin + performance.now(),
 			attributes: {
-				'span.op': 'procedure.handler',
 				'procedure.type': 'handler',
 				'procedure.name': this.name,
 				...this.details?.tracing?.attributes
 			}
-		}, async () => {
-			return await this._handler({
+		}, async span => {
+			const result = await this._handler({
 				params: input.params,
 				query: input.query,
 				body: input.body,
 				ctx: ctx as Ctx
 			})
+
+			span?.end(performance.timeOrigin + performance.now())
+			return result
 		})
 	}
 }

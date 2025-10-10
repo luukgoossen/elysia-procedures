@@ -13,6 +13,7 @@ A type-safe, composable procedure builder for [Elysia](https://elysiajs.com) wit
   - [Creating Actions](#creating-actions)
 - [Integrating with Elysia](#integrating-with-elysia)
 - [Caching](#caching)
+- [Telemetry](#telemetry)
 - [Acknowledgments](#acknowledgments)
 
 ## Features
@@ -262,6 +263,10 @@ const baseProcedure = createProcedure("Basic Procedure")
     return { requestTime: new Date() };
   });
 ```
+
+## Telemetry
+
+This package supports telemetry tracing. Both `@sentry/bun` and `@elysiajs/opentelemetry` are defined as optional peer dependencies. If either one is installed, telemetry traces will be made available. If both are installed, `@sentry/bun` takes priority over `@elysiajs/opentelemetry`.
 
 ## Acknowledgments
 
