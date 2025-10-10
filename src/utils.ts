@@ -1,5 +1,6 @@
 // import dependencies
 import { Type } from '@sinclair/typebox'
+import type { DocumentDecoration } from 'elysia'
 
 // import types
 import type { TObject } from '@sinclair/typebox'
@@ -35,6 +36,21 @@ export type Context = {
 	/** The received HTTP request */
 	request: Request
 	cookie: Record<string, Cookie<string | undefined>>
+}
+
+/**
+ * API documentation details for an action or procedure.
+ */
+export type Decorations = DocumentDecoration & Config
+
+/**
+ * Tracing configuration for an action or procedure.
+ */
+export type Config = {
+	tracing?: {
+		name?: string
+		attributes?: Record<string, unknown>
+	}
 }
 
 /**

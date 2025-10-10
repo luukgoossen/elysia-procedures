@@ -4,11 +4,10 @@ import { merge, toCamelCase } from './utils'
 import { record } from '@elysiajs/opentelemetry'
 
 // import types
-import type { DocumentDecoration } from 'elysia'
 import type { TSchema, TObject, Static } from '@sinclair/typebox'
 import type { Promisable } from 'type-fest'
 import type { ProcedureFnArgs, AnyMiddleware } from './procedure'
-import type { Context, SafeTObject, MergedObject } from './utils'
+import type { Context, SafeTObject, MergedObject, Decorations } from './utils'
 
 /**
  * Configuration arguments for creating an action builder.
@@ -32,7 +31,7 @@ export type ActionBuilderArgs<
 	/** Name of the action for identification */
 	name: string
 	/** API documentation details for the action */
-	details?: DocumentDecoration
+	details?: Decorations
 }
 
 /**
@@ -170,7 +169,7 @@ export class Action<
 	/** Name of the action for identification */
 	name: string
 	/** API documentation details for the action */
-	details?: DocumentDecoration
+	details?: Decorations
 	/** TypeBox schema for route parameters */
 	params: Params
 	/** TypeBox schema for query parameters */
@@ -221,7 +220,7 @@ export class Action<
 		params: Params extends TObject ? Static<Params> : any
 		query: Query extends TObject ? Static<Query> : any
 		body: Body extends TObject ? Static<Body> : any
-	}) => record(`Action: ${this.name}`, {
+	}) => record(`action.${this.details?.tracing?.name ?? this.name}`, {
 		attributes: {
 			type: 'handle',
 			action: this.name,
@@ -246,7 +245,7 @@ export class Action<
 		params: Params extends TObject ? Static<Params> : any,
 		query: Query extends TObject ? Static<Query> : any,
 		body: Body extends TObject ? Static<Body> : any,
-	}): Promise<Out> => record(`Action: ${this.name}`, {
+	}): Promise<Out> => record(`action.${this.details?.tracing?.name ?? this.name}`, {
 		attributes: {
 			type: 'run',
 			action: this.name,
@@ -257,7 +256,7 @@ export class Action<
 		let body = input.body
 
 		// validate the input
-		await record('Validate Inputs', {
+		await record(`action.${this.details?.tracing?.name ?? this.name}.input`, {
 			attributes: {
 				type: 'input',
 				action: this.name,
@@ -291,7 +290,7 @@ export class Action<
 		const output = this.output
 
 		// validate the output
-		return record('Validate Output', {
+		return record(`action.${this.details?.tracing?.name ?? this.name}.output`, {
 			attributes: {
 				type: 'output',
 				action: this.name,
@@ -307,10 +306,11 @@ export class Action<
 
 		// run the middlewares
 		for (const middleware of this._middlewares) {
-			await record(`Middleware: ${middleware.name}`, {
+			await record(`middleware.${middleware.config.tracing?.name ?? middleware.name}`, {
 				attributes: {
-					type: 'middleware',
-					action: this.name,
+					'procedure.type': 'middleware',
+					'procedure.name': middleware.name,
+					...middleware.config.tracing?.attributes
 				}
 			}, async () => {
 				const out = await middleware.execute({ params: input.params, query: input.query, body: input.body, ctx })
@@ -319,10 +319,11 @@ export class Action<
 		}
 
 		// run the action
-		return await record('Main Handler', {
+		return await record(`action.${this.details?.tracing?.name ?? this.name}.main`, {
 			attributes: {
-				type: 'handler',
-				action: this.name,
+				'procedure.type': 'main',
+				'procedure.name': this.name,
+				...this.details?.tracing?.attributes
 			}
 		}, async () => {
 			return await this._handler({
