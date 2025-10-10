@@ -3,10 +3,9 @@ import { ActionBuilder } from './action'
 import { merge } from './utils'
 
 // import types
-import type { DocumentDecoration } from 'elysia'
 import type { Static, TObject } from '@sinclair/typebox'
 import type { Promisable, Simplify } from 'type-fest'
-import type { Context, SafeTObject, MergedObject, MergedContext } from './utils'
+import type { Context, SafeTObject, MergedObject, MergedContext, Decorations, Config } from './utils'
 
 // define a local middleware cache
 const cache = new WeakMap<Request, Map<string, any>>()
@@ -30,6 +29,8 @@ export type ProcedureArgs<
 	middlewares: AnyMiddleware[]
 	/** Name of the procedure for identification */
 	name: string
+	/** Additional configuration for the procedure */
+	config: Config
 }
 
 /**
@@ -85,10 +86,14 @@ export class Middleware<
 	/** Name of the middleware for identification */
 	name: string
 
-	constructor(handler: ProcedureFn<Ctx, Params, Query, Body, Next>, name: string, keys?: ProcedureFn<Ctx, Params, Query, Body, string[]>) {
+	/** Additional configuration for the middleware */
+	config: Config
+
+	constructor(handler: ProcedureFn<Ctx, Params, Query, Body, Next>, name: string, config: Config, keys?: ProcedureFn<Ctx, Params, Query, Body, string[]>) {
 		this._handler = handler
 		this._keys = keys
 		this.name = name
+		this.config = config
 	}
 
 	/**
@@ -201,7 +206,7 @@ export class ProcedureBuilder<
 		 */
 	public build = <Next extends object | void>(handler?: ProcedureFn<Ctx, Params, Query, Body, Next>): Procedure<MergedContext<Ctx, Next>, Params, Query, Body> => {
 		if (handler) {
-			const middleware = new Middleware<Ctx, Params, Query, Body, Next>(handler, this._state.name, this._state.keys)
+			const middleware = new Middleware<Ctx, Params, Query, Body, Next>(handler, this._state.name, this._state.config, this._state.keys)
 			this._state.middlewares = [...this._state.middlewares, middleware]
 		}
 
@@ -244,7 +249,7 @@ export class Procedure<
 	 * @param details - API documentation details for the action
 	 * @returns A new ActionBuilder instance
 	 */
-	public createAction = (name: string, details?: DocumentDecoration) => {
+	public createAction = (name: string, details?: Decorations) => {
 		return new ActionBuilder<Ctx, Params, Query, Body, undefined>({
 			params: this.params,
 			query: this.query,
@@ -283,10 +288,11 @@ export const createProcedure = <
 	Params extends TObject | undefined = undefined,
 	Query extends TObject | undefined = undefined,
 	Body extends TObject | undefined = undefined
->(name: string, base?: Procedure<Ctx, Params, Query, Body>) => new ProcedureBuilder<Ctx, Params, Query, Body>({
+>(name: string, base?: Procedure<Ctx, Params, Query, Body>, config: Config = {}) => new ProcedureBuilder<Ctx, Params, Query, Body>({
 	params: base?.params as any,
 	query: base?.query as any,
 	body: base?.body as any,
 	middlewares: base?.middlewares ?? [],
 	name,
+	config
 })
