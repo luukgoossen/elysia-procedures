@@ -220,10 +220,12 @@ export class Action<
 		params: Params extends TObject ? Static<Params> : any
 		query: Query extends TObject ? Static<Query> : any
 		body: Body extends TObject ? Static<Body> : any
-	}) => record(`action.${this.details?.tracing?.name ?? this.name}`, {
+	}) => record(this.name, {
+		startTime: performance.timeOrigin + performance.now(),
 		attributes: {
-			type: 'handle',
-			action: this.name,
+			'op': 'procedure.action',
+			'procedure.type': 'action',
+			'procedure.name': this.name,
 		}
 	}, async () => {
 		const { params, query, body, ...ctx } = context
@@ -245,10 +247,12 @@ export class Action<
 		params: Params extends TObject ? Static<Params> : any,
 		query: Query extends TObject ? Static<Query> : any,
 		body: Body extends TObject ? Static<Body> : any,
-	}): Promise<Out> => record(`action.${this.details?.tracing?.name ?? this.name}`, {
+	}): Promise<Out> => record(this.name, {
+		startTime: performance.timeOrigin + performance.now(),
 		attributes: {
-			type: 'run',
-			action: this.name,
+			'op': 'procedure.action',
+			'procedure.type': 'action',
+			'procedure.name': this.name,
 		}
 	}, async () => {
 		let params = input.params
@@ -256,10 +260,12 @@ export class Action<
 		let body = input.body
 
 		// validate the input
-		await record(`action.${this.details?.tracing?.name ?? this.name}.input`, {
+		await record(`${this.name}: Validate Input`, {
+			startTime: performance.timeOrigin + performance.now(),
 			attributes: {
-				type: 'input',
-				action: this.name,
+				'op': 'procedure.input',
+				'procedure.type': 'input',
+				'procedure.name': this.name,
 			}
 		}, async () => {
 			// validate the params
@@ -290,10 +296,12 @@ export class Action<
 		const output = this.output
 
 		// validate the output
-		return record(`action.${this.details?.tracing?.name ?? this.name}.output`, {
+		return record(`${this.name}: Validate Output`, {
+			startTime: performance.timeOrigin + performance.now(),
 			attributes: {
-				type: 'output',
-				action: this.name,
+				'op': 'procedure.output',
+				'procedure.type': 'output',
+				'procedure.name': this.name,
 			}
 		}, () => Value.Parse(output, result))
 	}) as Promise<Out>
@@ -306,8 +314,10 @@ export class Action<
 
 		// run the middlewares
 		for (const middleware of this._middlewares) {
-			await record(`middleware.${middleware.config.tracing?.name ?? middleware.name}`, {
+			await record(middleware.name, {
+				startTime: performance.timeOrigin + performance.now(),
 				attributes: {
+					'op': 'procedure.middleware',
 					'procedure.type': 'middleware',
 					'procedure.name': middleware.name,
 					...middleware.config.tracing?.attributes
@@ -319,9 +329,11 @@ export class Action<
 		}
 
 		// run the action
-		return await record(`action.${this.details?.tracing?.name ?? this.name}.main`, {
+		return await record(`${this.name}: Handler`, {
+			startTime: performance.timeOrigin + performance.now(),
 			attributes: {
-				'procedure.type': 'main',
+				'op': 'procedure.handler',
+				'procedure.type': 'handler',
 				'procedure.name': this.name,
 				...this.details?.tracing?.attributes
 			}
