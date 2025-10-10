@@ -223,7 +223,7 @@ export class Action<
 	}) => record(this.name, {
 		startTime: performance.timeOrigin + performance.now(),
 		attributes: {
-			'op': 'procedure.action',
+			'span.op': 'procedure.action',
 			'procedure.type': 'action',
 			'procedure.name': this.name,
 		}
@@ -250,7 +250,7 @@ export class Action<
 	}): Promise<Out> => record(this.name, {
 		startTime: performance.timeOrigin + performance.now(),
 		attributes: {
-			'op': 'procedure.action',
+			'span.op': 'procedure.action',
 			'procedure.type': 'action',
 			'procedure.name': this.name,
 		}
@@ -263,7 +263,7 @@ export class Action<
 		await record(`${this.name}: Validate Input`, {
 			startTime: performance.timeOrigin + performance.now(),
 			attributes: {
-				'op': 'procedure.input',
+				'span.op': 'procedure.input',
 				'procedure.type': 'input',
 				'procedure.name': this.name,
 			}
@@ -299,7 +299,7 @@ export class Action<
 		return record(`${this.name}: Validate Output`, {
 			startTime: performance.timeOrigin + performance.now(),
 			attributes: {
-				'op': 'procedure.output',
+				'span.op': 'procedure.output',
 				'procedure.type': 'output',
 				'procedure.name': this.name,
 			}
@@ -317,7 +317,7 @@ export class Action<
 			await record(middleware.name, {
 				startTime: performance.timeOrigin + performance.now(),
 				attributes: {
-					'op': 'procedure.middleware',
+					'span.op': 'procedure.middleware',
 					'procedure.type': 'middleware',
 					'procedure.name': middleware.name,
 					...middleware.config.tracing?.attributes
@@ -332,7 +332,7 @@ export class Action<
 		return await record(`${this.name}: Handler`, {
 			startTime: performance.timeOrigin + performance.now(),
 			attributes: {
-				'op': 'procedure.handler',
+				'span.op': 'procedure.handler',
 				'procedure.type': 'handler',
 				'procedure.name': this.name,
 				...this.details?.tracing?.attributes
