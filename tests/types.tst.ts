@@ -128,7 +128,7 @@ describe('Basic Procedure Type Inference', () => {
 		const procedure = createProcedure('Test Procedure')
 			.build(() => ({ processed: true }))
 
-		expect(procedure).type.toBe<Procedure<{ request: Request, cookie: Record<string, Cookie<string | undefined>>, processed: boolean }, undefined, undefined, undefined>>()
+		expect(procedure).type.toBe<Procedure<{ request: Request, cookie: Record<string, Cookie<unknown>>, processed: boolean }, undefined, undefined, undefined>>()
 	})
 })
 
@@ -142,13 +142,13 @@ describe('Chained Procedure Type Inference', () => {
 
 		const derivedProcedure = createProcedure('Derived Procedure', baseProcedure)
 			.build(({ ctx, params, query, body }) => {
-				expect(ctx).type.toBe<{ request: Request, cookie: Record<string, Cookie<string | undefined>>, processed: boolean }>()
+				expect(ctx).type.toBe<{ request: Request, cookie: Record<string, Cookie<unknown>>, processed: boolean }>()
 				expect(params).type.toBe<{ id: number }>()
 				expect(query).type.toBe<{ sort: string }>()
 				expect(body).type.toBe<{ title: string }>()
 			})
 
-		expect(derivedProcedure).type.toBe<Procedure<{ request: Request, cookie: Record<string, Cookie<string | undefined>>, processed: boolean }, TObject<{ id: TNumber }>, TObject<{ sort: TString }>, TObject<{ title: TString }>>>()
+		expect(derivedProcedure).type.toBe<Procedure<{ request: Request, cookie: Record<string, Cookie<unknown>>, processed: boolean }, TObject<{ id: TNumber }>, TObject<{ sort: TString }>, TObject<{ title: TString }>>>()
 		expect(derivedProcedure.params).type.toBe<TObject<{ id: TNumber }>>()
 		expect(derivedProcedure.query).type.toBe<TObject<{ sort: TString }>>()
 		expect(derivedProcedure.body).type.toBe<TObject<{ title: TString }>>()
@@ -162,13 +162,13 @@ describe('Chained Procedure Type Inference', () => {
 		const derivedProcedure = createProcedure('Derived Procedure', baseProcedure)
 			.params(Type.Object({ name: Type.String() }))
 			.build(({ ctx, params, query, body }) => {
-				expect(ctx).type.toBe<{ request: Request, cookie: Record<string, Cookie<string | undefined>>, processed: boolean }>()
+				expect(ctx).type.toBe<{ request: Request, cookie: Record<string, Cookie<unknown>>, processed: boolean }>()
 				expect(params).type.toBe<{ id: number, name: string }>()
 				expect(query).type.toBeUndefined()
 				expect(body).type.toBeUndefined()
 			})
 
-		expect(derivedProcedure).type.toBe<Procedure<{ request: Request, cookie: Record<string, Cookie<string | undefined>>, processed: boolean }, TObject<{ id: TNumber, name: TString }>, undefined, undefined>>()
+		expect(derivedProcedure).type.toBe<Procedure<{ request: Request, cookie: Record<string, Cookie<unknown>>, processed: boolean }, TObject<{ id: TNumber, name: TString }>, undefined, undefined>>()
 		expect(derivedProcedure.params).type.toBe<TObject<{ id: TNumber, name: TString }>>()
 		expect(derivedProcedure.query).type.toBeUndefined()
 		expect(derivedProcedure.body).type.toBeUndefined()
@@ -190,7 +190,7 @@ describe('Chained Procedure Type Inference', () => {
 
 		expect(derivedProcedure).type.toBe<Procedure<{
 			request: Request
-			cookie: Record<string, Cookie<string | undefined>>
+			cookie: Record<string, Cookie<unknown>>
 			user: {
 				id: string
 				name: string
@@ -260,7 +260,7 @@ describe('Chained Procedure Type Inference', () => {
 
 		expect(ninethProcedure).type.toBe<Procedure<{
 			request: Request;
-			cookie: Record<string, Cookie<string | undefined>>;
+			cookie: Record<string, Cookie<unknown>>;
 			first: string;
 			second: string;
 			third: string;
@@ -313,7 +313,7 @@ describe('Action Inference', () => {
 		const action = procedure.createAction('Test Action')
 			.output(Type.String())
 			.build(({ ctx, params, query, body }) => {
-				expect(ctx).type.toBe<{ request: Request, cookie: Record<string, Cookie<string | undefined>>, processed: boolean }>()
+				expect(ctx).type.toBe<{ request: Request, cookie: Record<string, Cookie<unknown>>, processed: boolean }>()
 				expect(params).type.toBe<{ id: number }>()
 				expect(query).type.toBe<{ sort: string }>()
 				expect(body).type.toBe<{ title: string }>()
@@ -321,7 +321,7 @@ describe('Action Inference', () => {
 				return ''
 			})
 
-		expect(action).type.toBe<Action<{ request: Request, cookie: Record<string, Cookie<string | undefined>>, processed: boolean }, TObject<{ id: TNumber }>, TObject<{ sort: TString }>, TObject<{ title: TString }>, TString, string>>()
+		expect(action).type.toBe<Action<{ request: Request, cookie: Record<string, Cookie<unknown>>, processed: boolean }, TObject<{ id: TNumber }>, TObject<{ sort: TString }>, TObject<{ title: TString }>, TString, string>>()
 		expect(action.params).type.toBe<TObject<{ id: TNumber }>>()
 		expect(action.query).type.toBe<TObject<{ sort: TString }>>()
 		expect(action.body).type.toBe<TObject<{ title: TString }>>()
@@ -335,13 +335,13 @@ describe('Action Inference', () => {
 		const action = procedure.createAction('Test Action')
 			.params(Type.Object({ name: Type.String() }))
 			.build(({ ctx, params, query, body }) => {
-				expect(ctx).type.toBe<{request: Request, cookie: Record<string, Cookie<string | undefined>>,  processed: boolean }>()
+				expect(ctx).type.toBe<{request: Request, cookie: Record<string, Cookie<unknown>>,  processed: boolean }>()
 				expect(params).type.toBe<{ id: number, name: string }>()
 				expect(query).type.toBeUndefined()
 				expect(body).type.toBeUndefined()
 			})
 
-		expect(action).type.toBe<Action<{ request: Request, cookie: Record<string, Cookie<string | undefined>>, processed: boolean }, TObject<{ id: TNumber, name: TString }>, undefined, undefined, undefined, void>>()
+		expect(action).type.toBe<Action<{ request: Request, cookie: Record<string, Cookie<unknown>>, processed: boolean }, TObject<{ id: TNumber, name: TString }>, undefined, undefined, undefined, void>>()
 		expect(action.params).type.toBe<TObject<{ id: TNumber, name: TString }>>()
 		expect(action.query).type.toBeUndefined()
 		expect(action.body).type.toBeUndefined()
