@@ -35,7 +35,7 @@ export const merge = <
 export type Context = {
 	/** The received HTTP request */
 	request: Request
-	cookie: Record<string, Cookie<string | undefined>>
+	cookie: Record<string, Cookie<unknown>>
 }
 
 /**
