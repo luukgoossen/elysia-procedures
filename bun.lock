@@ -4,7 +4,7 @@
     "": {
       "name": "@luukgoossen/elysia-procedures",
       "dependencies": {
-        "@sinclair/typebox": "^0.34.33",
+        "@sinclair/typebox": "^0.34.41",
         "type-fest": "^4.41.0",
       },
       "devDependencies": {

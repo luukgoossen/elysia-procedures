@@ -335,21 +335,8 @@ export class Action<
 
 		// run the middlewares
 		for (const middleware of this._middlewares) {
-			await trace({
-				name: middleware.config.tracing?.name ?? middleware.name,
-				op: 'procedure.middleware',
-				startTime: performance.timeOrigin + performance.now(),
-				attributes: {
-					'procedure.type': 'middleware',
-					'procedure.name': middleware.name,
-					...middleware.config.tracing?.attributes
-				}
-			}, async span => {
-				const out = await middleware.execute({ params: input.params, query: input.query, body: input.body, ctx })
-				if (out) ctx = { ...ctx, ...out }
-				
-				span?.end(performance.timeOrigin + performance.now())
-			})
+			const out = await middleware.execute({ params: input.params, query: input.query, body: input.body, ctx })
+			if (out) ctx = { ...ctx, ...out }
 		}
 
 		// run the action
