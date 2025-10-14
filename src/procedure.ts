@@ -1,6 +1,7 @@
 // import dependencies
 import { ActionBuilder } from './action'
 import { merge } from './utils'
+import { trace } from './trace'
 
 // import types
 import type { Static, TObject } from '@sinclair/typebox'
@@ -101,15 +102,36 @@ export class Middleware<
 	 * @param input - The current procedure arguments
 	 * @returns - The additional context created by the middleware to be merged into the procedure
 	 */
-	public execute = async (input: ProcedureFnArgs<Ctx, Params, Query, Body>) => {
-		if (!this._keys) return await this._handler(input)
+	public execute = async (input: ProcedureFnArgs<Ctx, Params, Query, Body>) => trace({
+		name: this.config.tracing?.name ?? this.name,
+		op: 'procedure.middleware',
+		startTime: performance.timeOrigin + performance.now(),
+		attributes: {
+			'procedure.type': 'middleware',
+			'procedure.name': this.name,
+			...this.config.tracing?.attributes
+		}
+	}, async span => {
+		if (!this._keys) {
+			const result = await this._handler(input)
+
+			span?.setAttribute('procedure.cache', 'unavailable')
+			span?.end(performance.timeOrigin + performance.now())
+			return result
+		}
 
 		// compute a cache key based on the name and input params, query, and body
 		const key = cacheKey(this._id, await this._keys(input))
 
 		// check if the middleware has already been executed
 		const cached = cache.get(input.ctx.request) ?? new Map()
-		if (cached.has(key)) return cached.get(key)
+		if (cached.has(key)) {
+			const result = cached.get(key)
+
+			span?.setAttribute('procedure.cache.hit', true)
+			span?.end(performance.timeOrigin + performance.now())
+			return result
+		}
 
 		// execute the middleware handler
 		const result = await this._handler(input)
@@ -117,8 +139,11 @@ export class Middleware<
 		// store the result in the cache, use null for void results
 		cached.set(key, result ?? null)
 		cache.set(input.ctx.request, cached)
+		
+		span?.setAttribute('procedure.cache.hit', false)
+		span?.end(performance.timeOrigin + performance.now())
 		return result
-	}
+	})
 }
 
 /**
