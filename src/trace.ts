@@ -10,8 +10,8 @@ export const trace = async <T>(options: TraceOptions, fn: (span?: Span) => T) =>
 	// try tracing using sentry
 	try {
 		// @ts-expect-error dynamic import of optional dependency
-		const { startSpan } = await import('@sentry/bun')
-		return startSpan(options, fn) as T
+		const { startSpanManual } = await import('@sentry/bun')
+		return startSpanManual(options, fn) as T
 	} catch {}
 	
 	// try tracing using opentelemetry
