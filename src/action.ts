@@ -2,21 +2,25 @@
 import { Value } from '@sinclair/typebox/value'
 import { merge, toCamelCase } from './utils'
 import { trace } from './trace'
+import { createErrorFactory, statusesOf } from './error'
 
 // import types
-import type { TSchema, TObject, Static } from '@sinclair/typebox'
-import type { Promisable } from 'type-fest'
+import type { TSchema, Static } from '@sinclair/typebox'
+import type { Promisable, Simplify } from 'type-fest'
 import type { ProcedureFnArgs, AnyMiddleware } from './procedure'
-import type { Context, SafeTObject, MergedObject, Decorations } from './utils'
+import type { Context, ObjectSchema, SafeTObject, MergedObject, Decorations } from './utils'
+import type { DocumentDecoration } from 'elysia'
+import type { ErrorFactory, ErrorTable, DefaultErrors, NoErrors, Problem, ValidationProblem } from './error'
 
 /**
  * Configuration arguments for creating an action builder.
  */
 export type ActionBuilderArgs<
-	Params extends TObject | undefined,
-	Query extends TObject | undefined,
-	Body extends TObject | undefined,
-	Output extends TSchema | undefined
+	Params extends ObjectSchema | undefined,
+	Query extends ObjectSchema | undefined,
+	Body extends ObjectSchema | undefined,
+	Output extends TSchema | undefined,
+	Errors extends ErrorTable = NoErrors
 > = {
 	/** TypeBox schema for route parameters */
 	params: Params
@@ -30,8 +34,8 @@ export type ActionBuilderArgs<
 	middlewares: AnyMiddleware[]
 	/** Name of the action for identification */
 	name: string
-	/** API documentation details for the action */
-	details?: Decorations
+	/** API documentation details for the action, including the effective error configuration */
+	details?: Decorations<Errors>
 }
 
 /**
@@ -39,13 +43,14 @@ export type ActionBuilderArgs<
  */
 export type ActionArgs<
 	Ctx extends Context,
-	Params extends TObject | undefined,
-	Query extends TObject | undefined,
-	Body extends TObject | undefined,
-	Output extends TSchema | undefined
-> = ActionBuilderArgs<Params, Query, Body, Output> & {
+	Params extends ObjectSchema | undefined,
+	Query extends ObjectSchema | undefined,
+	Body extends ObjectSchema | undefined,
+	Output extends TSchema | undefined,
+	Errors extends ErrorTable = NoErrors
+> = ActionBuilderArgs<Params, Query, Body, Output, Errors> & {
 	/** The main handler function of the action */
-	handler: ActionFn<Ctx, Params, Query, Body, Output>
+	handler: ActionFn<Ctx, Params, Query, Body, Output, any, Errors>
 }
 
 /**
@@ -53,12 +58,31 @@ export type ActionArgs<
  */
 export type ActionFn<
 	Ctx extends Context,
-	Params extends TObject | undefined,
-	Query extends TObject | undefined,
-	Body extends TObject | undefined,
+	Params extends ObjectSchema | undefined,
+	Query extends ObjectSchema | undefined,
+	Body extends ObjectSchema | undefined,
 	Output extends TSchema | undefined,
-	Out = Output extends TSchema ? Static<Output> : any
-> = (input: ProcedureFnArgs<Ctx, Params, Query, Body>) => Promisable<Out>
+	Out = Output extends TSchema ? Static<Output> : any,
+	Errors extends ErrorTable = NoErrors
+> = (input: ProcedureFnArgs<Ctx, Params, Query, Body>, onError: ErrorFactory<Errors>) => Promisable<Out>
+
+/**
+ * The response schemas an action documents, keyed by status: the output under 200, `ValidationProblem` under 422
+ * and `Problem` under every other status in the error table.
+ *
+ * At runtime the error entries are the model names `'Problem'` and `'ValidationProblem'`. Elysia resolves those from
+ * the models the procedures() plugin registers on the root app, and `@elysiajs/openapi` emits them as `$ref`s. The
+ * type uses the schemas themselves, so routes typecheck on any instance, not only on one whose type carries the models.
+ *
+ * Error statuses only show up in the type when the table keeps them literal (inline literals or `defineError`).
+ * A status widened to `number` documents nothing.
+ */
+export type ActionResponses<Output extends TSchema | undefined, Errors extends ErrorTable> = Simplify<
+(Output extends TSchema ? { 200: Output } : unknown)
+& ErrorResponses<(Errors[keyof Errors] | DefaultErrors[keyof DefaultErrors])['status']>
+>
+
+type ErrorResponses<Status extends number> = number extends Status ? unknown : { [S in Status]: S extends 422 ? typeof ValidationProblem : typeof Problem }
 
 /**
  * Builder class for creating actions with a type-safe API.
@@ -66,14 +90,15 @@ export type ActionFn<
  */
 export class ActionBuilder<
 	Ctx extends Context,
-	Params extends TObject | undefined,
-	Query extends TObject | undefined,
-	Body extends TObject | undefined,
+	Params extends ObjectSchema | undefined,
+	Query extends ObjectSchema | undefined,
+	Body extends ObjectSchema | undefined,
 	Output extends TSchema | undefined,
+	Errors extends ErrorTable = NoErrors
 > {
-	private _state: ActionBuilderArgs<Params, Query, Body, Output>
+	private _state: ActionBuilderArgs<Params, Query, Body, Output, Errors>
 
-	constructor(base: ActionBuilderArgs<Params, Query, Body, Output>) {
+	constructor(base: ActionBuilderArgs<Params, Query, Body, Output, Errors>) {
 		this._state = base
 	}
 
@@ -84,24 +109,24 @@ export class ActionBuilder<
 	 * @private
 	 */
 	private _apply = <
-		P extends TObject | undefined,
-		Q extends TObject | undefined,
-		B extends TObject | undefined,
+		P extends ObjectSchema | undefined,
+		Q extends ObjectSchema | undefined,
+		B extends ObjectSchema | undefined,
 		O extends TSchema | undefined
 	>(
-		changes: Partial<ActionBuilderArgs<P, Q, B, O>>
-	): ActionBuilder<Ctx, P, Q, B, O> => {
-		return new ActionBuilder<Ctx, P, Q, B, O>({
+		changes: Partial<ActionBuilderArgs<P, Q, B, O, Errors>>
+	): ActionBuilder<Ctx, P, Q, B, O, Errors> => {
+		return new ActionBuilder<Ctx, P, Q, B, O, Errors>({
 			...this._state,
 			...changes
-		} as ActionBuilderArgs<P, Q, B, O>)
+		} as ActionBuilderArgs<P, Q, B, O, Errors>)
 	}
 
 	/**
 	 * Adds or merges route parameter definitions to the action.
 	 * @param params - The TypeBox schema defining the route parameters
 	 */
-	public params = <T extends TObject>(params: SafeTObject<T, Params>) => {
+	public params = <T extends ObjectSchema>(params: SafeTObject<T, Params>) => {
 		const mergedParams = merge(this._state.params, params)
 		return this._apply<MergedObject<SafeTObject<T, Params>, Params>, Query, Body, Output>({
 			params: mergedParams
@@ -112,7 +137,7 @@ export class ActionBuilder<
 	 * Adds or merges query parameter definitions to the action.
 	 * @param query - The TypeBox schema defining the query parameters
 	 */
-	public query = <T extends TObject>(query: SafeTObject<T, Query>) => {
+	public query = <T extends ObjectSchema>(query: SafeTObject<T, Query>) => {
 		const mergedQuery = merge(this._state.query, query)
 		return this._apply<Params, MergedObject<SafeTObject<T, Query>, Query>, Body, Output>({
 			query: mergedQuery
@@ -123,7 +148,7 @@ export class ActionBuilder<
 	 * Adds or merges request body definitions to the action.
 	 * @param body - The TypeBox schema defining the request body
 	 */
-	public body = <T extends TObject>(body: SafeTObject<T, Body>) => {
+	public body = <T extends ObjectSchema>(body: SafeTObject<T, Body>) => {
 		const mergedBody = merge(this._state.body, body)
 		return this._apply<Params, Query, MergedObject<SafeTObject<T, Body>, Body>, Output>({
 			body: mergedBody
@@ -143,8 +168,8 @@ export class ActionBuilder<
 	 * @param handler - The function to execute when this action is called
 	 * @returns A built action with the given handler
 	 */
-	public build = <Out>(handler: ActionFn<Ctx, Params, Query, Body, Output, Output extends TSchema ? Static<Output> : Out>) => {
-		return new Action<Ctx, Params, Query, Body, Output, Output extends TSchema ? Static<Output> : Out>({
+	public build = <Out>(handler: ActionFn<Ctx, Params, Query, Body, Output, Output extends TSchema ? Static<Output> : Out, Errors>) => {
+		return new Action<Ctx, Params, Query, Body, Output, Output extends TSchema ? Static<Output> : Out, Errors>({
 			handler: handler as any,
 			...this._state
 		})
@@ -157,19 +182,21 @@ export class ActionBuilder<
  */
 export class Action<
 	Ctx extends Context,
-	Params extends TObject | undefined,
-	Query extends TObject | undefined,
-	Body extends TObject | undefined,
+	Params extends ObjectSchema | undefined,
+	Query extends ObjectSchema | undefined,
+	Body extends ObjectSchema | undefined,
 	Output extends TSchema | undefined,
 	Out,
+	Errors extends ErrorTable = NoErrors
 > {
-	private _handler: ActionFn<Ctx, Params, Query, Body, Output>
+	private _handler: ActionFn<Ctx, Params, Query, Body, Output, any, Errors>
 	private _middlewares: AnyMiddleware[]
+	private _onError: ErrorFactory<Errors>
 
 	/** Name of the action for identification */
 	name: string
-	/** API documentation details for the action */
-	details?: Decorations
+	/** API documentation details for the action, including the effective error configuration */
+	details?: Decorations<Errors>
 	/** TypeBox schema for route parameters */
 	params: Params
 	/** TypeBox schema for query parameters */
@@ -179,9 +206,10 @@ export class Action<
 	/** TypeBox schema for response output */
 	output: Output
 
-	constructor(input: ActionArgs<Ctx, Params, Query, Body, Output>) {
+	constructor(input: ActionArgs<Ctx, Params, Query, Body, Output, Errors>) {
 		this._handler = input.handler
 		this._middlewares = input.middlewares
+		this._onError = createErrorFactory(input.details?.errors)
 
 		this.name = input.name
 		this.details = input.details
@@ -195,15 +223,21 @@ export class Action<
 	 * The API documentation for the action in Elysia route handler format.
 	 */
 	public get docs() {
+		const details = Object.fromEntries(Object.entries(this.details ?? {}).filter(([key]) => key !== 'errors' && key !== 'tracing')) as DocumentDecoration
+		const statuses = statusesOf(this.details?.errors?.table ?? {})
+
 		return {
 			params: this.params as any,
 			query: this.query,
 			body: this.body,
-			response: this.output,
+			response: {
+				...(this.output ? { 200: this.output } : {}),
+				...Object.fromEntries(statuses.map(status => [status, status === 422 ? 'ValidationProblem' : 'Problem'])),
+			} as ActionResponses<Output, Errors>,
 			detail: {
 				summary: this.name,
 				operationId: toCamelCase(this.name),
-				...this.details
+				...details,
 			},
 		}
 	}
@@ -217,29 +251,20 @@ export class Action<
 	 * @returns
 	 */
 	public handle = async (context: Context & {
-		params: Params extends TObject ? Static<Params> : any
-		query: Query extends TObject ? Static<Query> : any
-		body: Body extends TObject ? Static<Body> : any
-	}) => trace({
-		name: this.details?.tracing?.name ?? this.name,
-		op: 'procedure.action',
-		startTime: performance.timeOrigin + performance.now(),
-		attributes: {
-			'procedure.type': 'action',
-			'procedure.name': this.name,
-			...this.details?.tracing?.attributes
-		}
-	}, async span => {
+		params: Params extends ObjectSchema ? Static<Params> : any
+		query: Query extends ObjectSchema ? Static<Query> : any
+		body: Body extends ObjectSchema ? Static<Body> : any
+	}) => trace('action', this.details?.tracing?.name ?? this.name, {
+		'procedure.name': this.name,
+		...this.details?.tracing?.attributes
+	}, () => {
 		const { params, query, body, ...ctx } = context
 
-		const result = await this._execute(ctx, {
+		return this._execute(ctx, {
 			params: params,
 			query: query,
 			body: body,
 		})
-
-		span?.end(performance.timeOrigin + performance.now())
-		return result
 	})
 
 	/**
@@ -249,33 +274,19 @@ export class Action<
 	 * @returns
 	 */
 	public run = async (ctx: Context, input: {
-		params: Params extends TObject ? Static<Params> : any,
-		query: Query extends TObject ? Static<Query> : any,
-		body: Body extends TObject ? Static<Body> : any,
-	}): Promise<Out> => trace({
-		name: this.details?.tracing?.name ?? this.name,
-		op: 'procedure.action',
-		startTime: performance.timeOrigin + performance.now(),
-		attributes: {
-			'procedure.type': 'action',
-			'procedure.name': this.name,
-			...this.details?.tracing?.attributes
-		}
-	}, async span => {
+		params: Params extends ObjectSchema ? Static<Params> : any
+		query: Query extends ObjectSchema ? Static<Query> : any
+		body: Body extends ObjectSchema ? Static<Body> : any
+	}): Promise<Out> => trace('action', this.details?.tracing?.name ?? this.name, {
+		'procedure.name': this.name,
+		...this.details?.tracing?.attributes
+	}, async () => {
 		let params = input.params
 		let query = input.query
 		let body = input.body
 
 		// validate the input
-		await trace({
-			name: this.details?.tracing?.name ?? this.name,
-			op: 'procedure.input',
-			startTime: performance.timeOrigin + performance.now(),
-			attributes: {
-				'procedure.type': 'input',
-				'procedure.name': this.name,
-			}
-		}, span => {
+		trace('input', this.details?.tracing?.name ?? this.name, { 'procedure.name': this.name }, () => {
 			// validate the params
 			if (this.params) {
 				params = this.params ? Value.Parse(this.params, input.params) : input.params
@@ -290,8 +301,6 @@ export class Action<
 			if (this.body) {
 				body = this.body ? Value.Parse(this.body, input.body) : input.body
 			}
-
-			span?.end(performance.timeOrigin + performance.now())
 		})
 
 		// run the action
@@ -302,35 +311,16 @@ export class Action<
 		})
 
 		// skip the output validation if no output schema is defined
-		if (!this.output) {
-			span?.end(performance.timeOrigin + performance.now())
-			return result
-		}
+		if (!this.output) return result
 
 		// validate the output
-		const output = await trace({
-			name: this.details?.tracing?.name ?? this.name,
-			op: 'procedure.output',
-			startTime: performance.timeOrigin + performance.now(),
-			attributes: {
-				'procedure.type': 'output',
-				'procedure.name': this.name,
-			}
-		}, span => {
-			const output = Value.Parse(this.output!, result)
-
-			span?.end(performance.timeOrigin + performance.now())
-			return output
-		})
-
-		span?.end(performance.timeOrigin + performance.now())
-		return output
+		return trace('output', this.details?.tracing?.name ?? this.name, { 'procedure.name': this.name }, () => Value.Parse(this.output!, result))
 	}) as Promise<Out>
 
 	private _execute = async (ctx: Context, input: {
-		params: Params extends TObject ? Static<Params> : any,
-		query: Query extends TObject ? Static<Query> : any,
-		body: Body extends TObject ? Static<Body> : any,
+		params: Params extends ObjectSchema ? Static<Params> : any
+		query: Query extends ObjectSchema ? Static<Query> : any
+		body: Body extends ObjectSchema ? Static<Body> : any
 	}): Promise<Out> => {
 
 		// run the middlewares
@@ -340,25 +330,14 @@ export class Action<
 		}
 
 		// run the action
-		return await trace({
-			name: this.details?.tracing?.name ?? this.name,
-			op: 'procedure.handler',
-			startTime: performance.timeOrigin + performance.now(),
-			attributes: {
-				'procedure.type': 'handler',
-				'procedure.name': this.name,
-				...this.details?.tracing?.attributes
-			}
-		}, async span => {
-			const result = await this._handler({
-				params: input.params,
-				query: input.query,
-				body: input.body,
-				ctx: ctx as Ctx
-			})
-
-			span?.end(performance.timeOrigin + performance.now())
-			return result
-		})
+		return trace('handler', this.details?.tracing?.name ?? this.name, {
+			'procedure.name': this.name,
+			...this.details?.tracing?.attributes
+		}, () => this._handler({
+			params: input.params,
+			query: input.query,
+			body: input.body,
+			ctx: ctx as Ctx
+		}, this._onError))
 	}
 }

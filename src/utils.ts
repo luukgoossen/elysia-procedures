@@ -1,16 +1,20 @@
 // import dependencies
 import { Type } from '@sinclair/typebox'
 import type { DocumentDecoration } from 'elysia'
+import type { Attributes } from '@opentelemetry/api'
 
 // import types
-import type { TObject } from '@sinclair/typebox'
-import type { Merge, Simplify } from 'type-fest'
+import type { TObject, TProperties, TSchema } from '@sinclair/typebox'
+import type { Simplify } from 'type-fest'
 import type { Cookie } from 'elysia'
+import type { ErrorConfig, ErrorTable } from './error'
 
 /** Converts a string from Title Case to camelCase */
 export const toCamelCase = (str: string): string =>
 	str
-		.replace(/(?:^\w|[A-Z]|\b\w)/g, (match, index) => index === 0 ? match.toLowerCase() : match.toUpperCase())
+		.replace(/(?:^\w|[A-Z]|\b\w)/g, (match, index) =>
+			index === 0 ? match.toLowerCase() : match.toUpperCase(),
+		)
 		.replace(/\s+/g, '')
 
 /**
@@ -21,13 +25,19 @@ export const toCamelCase = (str: string): string =>
  * @returns A new object schema that combines properties from both schemas.
  */
 export const merge = <
-	Prev extends TObject | undefined,
-	Next extends TObject | never,
->(prev: Prev, next: Next): MergedObject<Next, Prev> =>
-	Type.Object({
-		...next.properties,
-		...(prev ? prev.properties : {}),
-	}, { additionalProperties: false }) as any
+	Prev extends ObjectSchema | undefined,
+	Next extends ObjectSchema,
+>(
+	prev: Prev,
+	next: Next,
+): MergedObject<Next, Prev> =>
+	Type.Object(
+		{
+			...next.properties,
+			...(prev ? prev.properties : {}),
+		},
+		{ additionalProperties: false },
+	) as any
 
 /**
  * Base context available in all procedures.
@@ -39,53 +49,61 @@ export type Context = {
 }
 
 /**
- * API documentation details for an action or procedure.
+ * Structural stand-in for `TObject` in generic constraints and conditional types.
+ *
+ * Checking a schema against `TObject` itself makes TypeScript compare the two structurally, which evaluates the
+ * schema's `static` type (TypeBox's `ObjectStatic`) on every check. Checking against this alias only compares `type`
+ * and `properties`, around forty times cheaper, and still rejects non-object schemas. Any `TObject<...>` satisfies it.
  */
-export type Decorations = DocumentDecoration & Config
+export type ObjectSchema = TSchema & { type: 'object', properties: TProperties }
 
 /**
- * Tracing configuration for an action or procedure.
+ * API documentation details for an action or procedure.
  */
-export type Config = {
+export type Decorations<Errors extends ErrorTable = ErrorTable> = DocumentDecoration & Config<Errors>
+
+/**
+ * Tracing and error configuration for an action or procedure.
+ */
+export type Config<Errors extends ErrorTable = ErrorTable> = {
 	tracing?: {
 		name?: string
-		attributes?: Record<string, unknown>
+		attributes?: Attributes
 	}
+	errors?: ErrorConfig<Errors>
 }
 
 /**
- * A utlity type that ensures a TObject (Next) does not have any overlapping properties with an opional reference TObject (Prev).
+ * Resolves to Next when its properties do not overlap with those of the optional Prev schema, and to never otherwise.
  */
-export type SafeTObject<Next extends TObject, Prev extends TObject | undefined = undefined> = Prev extends TObject
-	? (Extract<keyof Prev['properties'], keyof Next['properties']> extends never
+export type SafeTObject<
+	Next extends ObjectSchema,
+	Prev extends ObjectSchema | undefined = undefined,
+> = Prev extends ObjectSchema
+	? Extract<keyof Prev['properties'], keyof Next['properties']> extends never
 		? Next
-		: never)
+		: never
 	: Next
 
 /**
- * A utility type that checks the properties of a TypeBox object schema.
- */
-export type CheckProperties<T extends TObject | undefined> = T extends TObject ? T['properties'] : unknown
-
-/**
- * A utility type that merges the properties of two TypeBox object schemas.
- * The second schema is optional and can be undefined.
- */
-export type MergedProperties<Next extends TObject, Prev extends TObject | undefined = undefined> = Merge<Next['properties'], CheckProperties<Prev>>
-
-/**
- * A utility type that merges two TypeBox objects into one.
- * The next schema's properties will override the previous schema's properties.
+ * Merges two object schemas into one.
+ * Without a previous schema the next schema is returned as is, so no new type is created.
+ * `SafeTObject` already rejects overlapping properties, so a plain intersection of the properties is exact.
  */
 export type MergedObject<
-	Next extends TObject | never,
-	Prev extends TObject | undefined = undefined,
-> = Next extends TObject
-	? TObject<Simplify<MergedProperties<Next, Prev>>>
-	: Prev
+	Next extends ObjectSchema,
+	Prev extends ObjectSchema | undefined = undefined,
+> = Next extends ObjectSchema
+	? Prev extends ObjectSchema
+		? TObject<Simplify<Next['properties'] & Prev['properties']>>
+		: Next
+	: never
 
 /**
  * A utility type that merges the context of a procedure with an optional next context.
  * The next context can be an object or void.
  */
-export type MergedContext<Ctx extends Context, Next extends object | void = void> = Simplify<Context & Merge<Ctx, Next extends object ? Next : unknown>>
+export type MergedContext<
+	Ctx extends Context,
+	Next extends object | void = void,
+> = [Next] extends [object] ? Simplify<Context & Omit<Ctx, keyof Next> & Next> : Ctx

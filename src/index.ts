@@ -1,19 +1,32 @@
 // we need this for type format support
-import { } from 'elysia'
+import {} from 'elysia'
+
+export { createProcedure } from './procedure'
+
+export type { Middleware, Procedure } from './procedure'
+
+export type { Action } from './action'
 
 export {
-	createProcedure
-} from './procedure'
+	ApiError,
+	Problem,
+	ValidationProblem,
+	ProblemFieldError,
+	defineError,
+} from './error'
 
-export type {
-	Middleware,
-	Procedure,
-} from './procedure'
+export type { ErrorTable, ErrorFactory } from './error'
 
-export type {
-	Action
-} from './action'
+export { resolveProblem, problemResponse } from './problems'
 
-export type {
-	Context
-} from './utils'
+export type { ResolveProblemOptions } from './problems'
+
+export { procedures, procedureModels, sentryReporter } from './plugin'
+
+export type { ProceduresOptions, ProblemReporter, ProblemLogger, SentryReporterOptions, SentryLike } from './plugin'
+
+export { configureTracing } from './trace'
+
+export type { TracingOptions, SpanType } from './trace'
+
+export type { Context, Config, Decorations, ObjectSchema } from './utils'

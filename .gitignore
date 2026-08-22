@@ -8,6 +8,8 @@ dist
 
 # generated files
 **/generated.ts
+bench/consumer.ts
+bench/trace
 
 # code coverage
 coverage
