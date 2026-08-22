@@ -6,8 +6,9 @@ import { ApiError } from './error'
 import type { Attributes, Span, Tracer } from '@opentelemetry/api'
 
 /**
- * The kinds of spans this package emits. `action` and `middleware` wrap one action/middleware run, `handler` the
- * action's own handler (after its middlewares), `input` and `output` the validation around `action.run()`.
+ * The kinds of spans this package emits. `action` wraps one action run and `middleware` one middleware run.
+ * `handler` wraps the action's own handler, after its middlewares. `input` and `output` wrap the validation
+ * around `action.run()`.
  */
 export type SpanType = 'action' | 'middleware' | 'handler' | 'input' | 'output'
 
@@ -15,9 +16,9 @@ export type SpanType = 'action' | 'middleware' | 'handler' | 'input' | 'output'
  * Options for tracing procedure and action runs through OpenTelemetry.
  */
 export type TracingOptions = {
-	/** The tracer to create spans with; default: the global provider's tracer for this package */
+	/** The tracer to create spans with. Defaults to the global provider's tracer for this package */
 	tracer?: Tracer
-	/** Which span types to emit; every type defaults to true */
+	/** Which span types to emit. Every type defaults to true */
 	spans?: Partial<Record<SpanType, boolean>>
 	/** Attributes added to every span */
 	attributes?: Attributes
@@ -54,7 +55,7 @@ export const configureTracing = (options: TracingOptions | boolean = true) => {
 	}
 }
 
-/** Marks the span for a failure: client ApiErrors are not span errors, everything else is */
+/** Marks the span for a failure. A 4xx ApiError is an expected outcome and does not fail the span; everything else does */
 const fail = (span: Span, error: unknown) => {
 	if (error instanceof ApiError && error.status < 500) {
 		span.setAttribute('procedure.error.reason', error.reason)
@@ -68,7 +69,7 @@ const fail = (span: Span, error: unknown) => {
 
 /**
  * Runs `fn` inside an active span of the given type, when tracing is configured and the type is enabled. The span
- * ends when `fn` returns or its promise settles, and records the failure when it throws.
+ * ends when `fn` returns or its promise settles, and records the failure if it throws.
  * @param type The kind of span
  * @param name The span name
  * @param attributes Attributes specific to this span

@@ -12,7 +12,7 @@ import type { Problem, ValidationProblem, ProblemFieldError, ProblemFieldLocatio
 export type ResolveProblemOptions = {
 	/** Request path, exposed as the problem's `instance` */
 	instance?: string
-	/** Error configuration used for the problems built here, so copy and `type` URIs line up with the procedures */
+	/** Error configuration for the problems built here; pass the procedures' so copy and `type` URIs line up */
 	errors?: ErrorConfig
 	/** Maximum characters of `received` echoed per field error; default 200 */
 	receivedMaxLength?: number
@@ -21,7 +21,7 @@ export type ResolveProblemOptions = {
 /** Pointer segments whose value is never echoed back */
 const SENSITIVE = /password|secret|token|key/i
 
-/** Serializes a received value as JSON, eliding sensitive fields, values without a JSON form, and truncating long values */
+/** Serializes a received value as JSON. Returns undefined for sensitive fields and values without a JSON form, and truncates long values */
 const describeReceived = (pointer: string, value: unknown, max: number): string | undefined => {
 	if (pointer.split('/').some(segment => SENSITIVE.test(segment))) return undefined
 
@@ -90,12 +90,13 @@ const factoryFor = (errors?: ErrorConfig) => {
 }
 
 /**
- * Resolves an error caught by Elysia's `onError` into an RFC 9457 problem. This is the wire contract as a pure function:
- * it performs no reporting or logging, never includes raw messages of unexpected errors, and returns `undefined` for
- * values Elysia uses for redirects and early returns (thrown Responses and `status(...)` values), which should pass through.
+ * Resolves an error caught by Elysia's `onError` into an RFC 9457 problem. This is the wire contract as a pure
+ * function. It does no reporting or logging and never includes the raw message of an unexpected error. Thrown
+ * Responses and `status(...)` values, which Elysia uses for redirects and early returns, resolve to `undefined` so
+ * the caller can let them pass through.
  * @param code - Elysia's error code
  * @param error - The caught error
- * @param options - Instance, error configuration and echo limits
+ * @param options - Instance, error configuration and echo limit
  */
 export const resolveProblem = (code: string | number, error: unknown, options: ResolveProblemOptions = {}): Problem | ValidationProblem | undefined => {
 	if (error instanceof Response || error instanceof ElysiaCustomStatusResponse) return undefined
@@ -121,7 +122,7 @@ export const resolveProblem = (code: string | number, error: unknown, options: R
 	if (code === 'INVALID_COOKIE_SIGNATURE') return onError('MALFORMED_REQUEST', undefined, { detail: 'The request carries a cookie with an invalid signature.' }).toProblem({ instance })
 	if (code === 'NOT_FOUND') return onError('NOT_FOUND').toProblem({ instance })
 
-	// anything else, including response validation failures: the server, not the client, is at fault
+	// anything else, including response validation failures, is the server's fault
 	return onError('INTERNAL').toProblem({ instance })
 }
 

@@ -49,11 +49,11 @@ export type Context = {
 }
 
 /**
- * Structural stand-in for `TObject` used in generic constraints and conditional types.
+ * Structural stand-in for `TObject` in generic constraints and conditional types.
  *
- * Relating a schema to `TObject` itself makes TypeScript compare the two structurally, which evaluates the schema's
- * `static` type (TypeBox's `ObjectStatic`) for every check. Relating it to this alias only compares `type` and `properties`,
- * which is around forty times cheaper while still rejecting non-object schemas. Any `TObject<...>` satisfies it.
+ * Checking a schema against `TObject` itself makes TypeScript compare the two structurally, which evaluates the
+ * schema's `static` type (TypeBox's `ObjectStatic`) on every check. Checking against this alias only compares `type`
+ * and `properties`, around forty times cheaper, and still rejects non-object schemas. Any `TObject<...>` satisfies it.
  */
 export type ObjectSchema = TSchema & { type: 'object'; properties: TProperties }
 
@@ -75,7 +75,7 @@ export type Config<Errors extends ErrorTable = ErrorTable> = {
 }
 
 /**
- * A utility type that ensures an object schema (Next) does not have any overlapping properties with an optional reference schema (Prev).
+ * Resolves to Next when its properties do not overlap with those of the optional Prev schema, and to never otherwise.
  */
 export type SafeTObject<
 	Next extends ObjectSchema,
@@ -87,9 +87,9 @@ export type SafeTObject<
 	: Next
 
 /**
- * A utility type that merges two object schemas into one.
+ * Merges two object schemas into one.
  * Without a previous schema the next schema is returned as is, so no new type is created.
- * Overlapping properties are rejected by `SafeTObject`, so a plain intersection of the properties is exact.
+ * `SafeTObject` already rejects overlapping properties, so a plain intersection of the properties is exact.
  */
 export type MergedObject<
 	Next extends ObjectSchema,

@@ -34,7 +34,7 @@ export type ActionBuilderArgs<
 	middlewares: AnyMiddleware[]
 	/** Name of the action for identification */
 	name: string
-	/** API documentation details for the action, carrying the effective error configuration */
+	/** API documentation details for the action, including the effective error configuration */
 	details?: Decorations<Errors>
 }
 
@@ -67,11 +67,15 @@ export type ActionFn<
 > = (input: ProcedureFnArgs<Ctx, Params, Query, Body>, onError: ErrorFactory<Errors>) => Promisable<Out>
 
 /**
- * The status-keyed response schemas documented for an action: the output under 200, `ValidationProblem` under 422 and `Problem` per other error status.
- * At runtime the error entries are the model names `'Problem'` / `'ValidationProblem'`, which Elysia resolves from the models the procedures() plugin
- * registers on the root app and which `@elysiajs/openapi` emits as `$ref`s. They are typed as the schemas themselves so routes typecheck on any
- * instance, not only on those whose type carries the models.
- * Error statuses are only typed when the table keeps them literal (inline literals or `defineError`); a widened `number` status documents nothing at the type level.
+ * The response schemas an action documents, keyed by status: the output under 200, `ValidationProblem` under 422
+ * and `Problem` under every other status in the error table.
+ *
+ * At runtime the error entries are the model names `'Problem'` and `'ValidationProblem'`. Elysia resolves those from
+ * the models the procedures() plugin registers on the root app, and `@elysiajs/openapi` emits them as `$ref`s. The
+ * type uses the schemas themselves, so routes typecheck on any instance, not only on one whose type carries the models.
+ *
+ * Error statuses only show up in the type when the table keeps them literal (inline literals or `defineError`).
+ * A status widened to `number` documents nothing.
  */
 export type ActionResponses<Output extends TSchema | undefined, Errors extends ErrorTable> = Simplify<
 (Output extends TSchema ? { 200: Output } : unknown)
@@ -191,7 +195,7 @@ export class Action<
 
 	/** Name of the action for identification */
 	name: string
-	/** API documentation details for the action, carrying the effective error configuration */
+	/** API documentation details for the action, including the effective error configuration */
 	details?: Decorations<Errors>
 	/** TypeBox schema for route parameters */
 	params: Params

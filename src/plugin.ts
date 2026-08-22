@@ -24,15 +24,19 @@ export type ProblemLogger = (level: 'warn' | 'error', fields: Record<string, unk
  * Options for the procedures() plugin, grouped by concern.
  */
 export type ProceduresOptions = {
-	/** The wire contract: error configuration for the problems the plugin builds itself, so copy and `type` URIs line up with the procedures, and echo limits */
+	/**
+	 * Error configuration for the problems the plugin builds itself (validation, parse and unknown route failures).
+	 * Pass the same `type` function and overrides as the procedures so copy and `type` URIs line up. Also holds the
+	 * limit on how much of a received value is echoed back in validation problems.
+	 */
 	errors?: ErrorConfig & Pick<ResolveProblemOptions, 'receivedMaxLength'>
-	/** Policy: how handled failures are reported and logged, and whether runs are traced */
+	/** How handled failures are reported and logged, and whether runs are traced */
 	observability?: {
-		/** Reports failures and yields the `reference`; default: none, problems carry no `reference` */
+		/** Reports failures and returns the `reference` to expose. Without one nothing is reported and problems carry no `reference` */
 		errorReporting?: ProblemReporter
-		/** Logs handled failures; default console.warn for 4xx and console.error for 5xx */
+		/** Logs handled failures. Defaults to console.warn for 4xx and console.error for 5xx */
 		logging?: ProblemLogger
-		/** Traces procedure and action runs through the OpenTelemetry API; default: off */
+		/** Traces procedure and action runs through the OpenTelemetry API. Off by default */
 		tracing?: TracingOptions | boolean
 	}
 }
@@ -41,7 +45,7 @@ export type ProceduresOptions = {
  * Options for the Sentry reporter.
  */
 export type SentryReporterOptions = {
-	/** Report 4xx ApiErrors as messages: 'off' (default), 'warn' (level warning) or 'all' (level info) */
+	/** Whether to capture 4xx ApiErrors as messages: 'off' (default), 'warn' (at level warning) or 'all' (at level info) */
 	captureClientErrors?: 'off' | 'warn' | 'all'
 }
 
@@ -54,8 +58,9 @@ export type SentryLike = {
 }
 
 /**
- * A reporter for Sentry: 5xx problems are captured as exceptions (Sentry follows the `cause` chain), 4xx ApiErrors
- * optionally as messages. Pass the SDK you initialized, e.g. `sentryReporter(Sentry)` with `import * as Sentry from '@sentry/bun'`.
+ * A reporter for Sentry. Captures 5xx problems as exceptions (Sentry follows the `cause` chain) and, when enabled,
+ * 4xx ApiErrors as messages. Pass the SDK you initialized, e.g. `sentryReporter(Sentry)` after
+ * `import * as Sentry from '@sentry/bun'`.
  */
 export const sentryReporter = (sentry: SentryLike, options: SentryReporterOptions = {}): ProblemReporter => {
 	const capture = options.captureClientErrors ?? 'off'
@@ -71,24 +76,24 @@ export const sentryReporter = (sentry: SentryLike, options: SentryReporterOption
 	}
 }
 
-/** Extracts the message to log for a failure; never exposed in the body */
+/** The message to log for a failure. It goes to the log only, never into the response */
 const messageOf = (error: unknown) => {
 	if (error instanceof ApiError) return error.cause instanceof Error ? error.cause.message : error.message
 	return error instanceof Error ? error.message : String(error)
 }
 
 /**
- * Registers the `Problem` and `ValidationProblem` models that `action.docs` reference, and `ApiError` as a known error.
- * Use this instead of procedures() when bringing your own `onError` handler.
+ * Registers the `Problem` and `ValidationProblem` models that `action.docs` reference, and `ApiError` as a known
+ * error. Mount this instead of procedures() when you bring your own `onError` handler.
  */
 export const procedureModels = () => new Elysia({ name: 'elysia-procedures/models' })
 	.model({ Problem, ValidationProblem })
 	.error({ API_ERROR: ApiError })
 
 /**
- * The Elysia integration of elysia-procedures. Registers the problem models and serializes every failure to an
- * RFC 9457 `application/problem+json` response, reporting and logging it, and configures tracing. Mount it once on
- * the root app before any sub-apps. Redirects, thrown Responses and `status(...)` values pass through.
+ * The Elysia plugin. Registers the problem models, serializes every failure to an RFC 9457
+ * `application/problem+json` response, reports and logs it, and configures tracing. Mount it once on the root app,
+ * before any sub-apps. Redirects, thrown Responses and `status(...)` values pass through untouched.
  */
 export const procedures = (options: ProceduresOptions = {}) => {
 	const { receivedMaxLength, ...errors } = options.errors ?? {}

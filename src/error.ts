@@ -13,13 +13,13 @@ import type { Simplify } from 'type-fest'
 export type ErrorEntry<M extends ObjectSchema | undefined = undefined> = {
 	/** HTTP status code of the error */
 	status: number;
-	/** TypeBox schema for the metadata argument of onError(); omit = no metadata */
+	/** TypeBox schema for the metadata argument of onError(); without it the error takes no metadata */
 	metadata?: M;
-	/** Default title; string or function of the (validated) metadata */
+	/** Default title, as a string or a function of the validated metadata */
 	title?:
 	| string
 	| ((metadata: M extends ObjectSchema ? Static<M> : undefined) => string);
-	/** Default detail; same shape as title */
+	/** Default detail, same shape as title */
 	detail?:
 	| string
 	| ((metadata: M extends ObjectSchema ? Static<M> : undefined) => string);
@@ -39,14 +39,14 @@ export type NoErrors = Record<never, never>
  * Error configuration of a procedure or action.
  */
 export type ErrorConfig<Errors extends ErrorTable = ErrorTable> = {
-	/** Builds the RFC 9457 `type` URI for a reason; default: () => 'about:blank' */
+	/** Builds the RFC 9457 `type` URI for a reason; defaults to 'about:blank' for every reason */
 	type?: (reason: string) => string;
-	/** Error table; merged by key with the parent's, child wins */
+	/** Error table, merged by key with the parent's; the child's entry wins */
 	table?: Errors;
 }
 
 /**
- * Error entries the package relies on. Always present, overridable by key.
+ * Error entries the package itself uses. They are always present in every table and can be overridden by key.
  */
 export const DEFAULT_ERRORS = {
 	INTERNAL: {
@@ -153,7 +153,7 @@ export type ApiErrorOptions = {
 }
 
 /**
- * A thrown API error. Serialized to an RFC 9457 problem by the procedures() plugin.
+ * An error thrown by a handler. The procedures() plugin serializes it to an RFC 9457 problem.
  */
 export class ApiError<
 	Reason extends string = string,
@@ -224,15 +224,16 @@ export type ErrorArgs<E extends ErrorEntry<any>> = E['metadata'] extends ObjectS
 	: [metadata?: undefined, options?: ApiErrorOptions]
 
 /**
- * Factory producing typed ApiErrors from an error table. The package defaults are always callable, overridable by key.
- * A single generic signature resolves the metadata type per call site, so the table is never expanded eagerly.
+ * Creates typed ApiErrors from an error table. The package defaults are always callable and can be overridden by key.
+ * One generic signature resolves the metadata type per call site instead of one overload per entry, which keeps
+ * the type checker's work small for large tables.
  */
 export type ErrorFactory<Errors extends ErrorTable> = {
 	<R extends keyof MergedErrors<DefaultErrors, Errors> & string>(
 		reason: R,
 		...args: ErrorArgs<MergedErrors<DefaultErrors, Errors>[R]>
 	): ApiError<R, ErrorMetadata<MergedErrors<DefaultErrors, Errors>[R]>>;
-	/** Wraps an unexpected failure as a 5xx error; the cause is reported but never serialized */
+	/** Wraps an unexpected failure in a 5xx error. The cause reaches the reporter and the log, never the response */
 	unexpected(
 		cause: unknown,
 		options?: ApiErrorOptions & { reason?: keyof Errors & string },
@@ -252,7 +253,8 @@ const resolveCopy = (copy: ErrorEntry<any>['title'], metadata: unknown) =>
 	typeof copy === 'function' ? copy(metadata as any) : copy
 
 /**
- * Creates an onError factory bound to an effective error configuration. The package defaults back any missing entry.
+ * Creates an onError factory bound to an effective error configuration. Entries missing from the table fall back
+ * to the package defaults.
  * @param config - The effective error configuration; `type` defaults to 'about:blank'
  */
 export const createErrorFactory = <Errors extends ErrorTable>(
@@ -324,7 +326,7 @@ export const createErrorFactory = <Errors extends ErrorTable>(
 }
 
 /**
- * Merges two error configurations. The child's table entries and type function win.
+ * Merges two error configurations. The child's table entries win per key, and so does its `type` function when set.
  */
 export const mergeErrors = <
 	Parent extends ErrorTable,
@@ -360,8 +362,8 @@ export const statusesOf = (table: ErrorTable): number[] =>
 	].sort((a, b) => a - b)
 
 /**
- * Identity helper that types the `title` / `detail` functions of an entry from its `metadata` schema,
- * so they can be written inline without annotating the metadata parameter.
+ * Returns the entry unchanged, but typed so that the `title` and `detail` functions receive the metadata type of
+ * the entry's own schema. Inside a plain object literal that parameter would have to be annotated by hand.
  * @param entry - The error entry
  */
 export function defineError<const S extends number, M extends ObjectSchema>(entry: {

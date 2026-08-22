@@ -292,7 +292,7 @@ export class Procedure<
  *
  * @param name - Descriptive name for the procedure (used in logs and debugging)
  * @param base - Optional base procedure to inherit from
- * @param config - Optional tracing and error configuration, merged onto the base procedure's
+ * @param config - Optional tracing and error configuration, merged on top of the base procedure's
  *
  * @example
  * ```ts
@@ -300,7 +300,7 @@ export class Procedure<
  * 	.params(Type.Object({
  * 		id: Type.String()
  * 	}))
- * 	.handler(({ params }) => ({
+ * 	.build(({ params }) => ({
  * 		user: {
  * 			id: params.id,
  * 			name: "John Doe"
