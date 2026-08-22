@@ -109,22 +109,13 @@ export class Middleware<
 	 * @param input - The current procedure arguments
 	 * @returns - The additional context created by the middleware to be merged into the procedure
 	 */
-	public execute = async (input: ProcedureFnArgs<Ctx, Params, Query, Body>) => trace({
-		name: this.config.tracing?.name ?? this.name,
-		op: 'procedure.middleware',
-		startTime: performance.timeOrigin + performance.now(),
-		attributes: {
-			'procedure.type': 'middleware',
-			'procedure.name': this.name,
-			...this.config.tracing?.attributes
-		}
+	public execute = async (input: ProcedureFnArgs<Ctx, Params, Query, Body>) => trace('middleware', this.config.tracing?.name ?? this.name, {
+		'procedure.name': this.name,
+		...this.config.tracing?.attributes
 	}, async span => {
 		if (!this._keys) {
-			const result = await this._handler(input, this._onError)
-
 			span?.setAttribute('procedure.cache', 'unavailable')
-			span?.end(performance.timeOrigin + performance.now())
-			return result
+			return await this._handler(input, this._onError)
 		}
 
 		// compute a cache key based on the name and input params, query, and body
@@ -133,11 +124,8 @@ export class Middleware<
 		// check if the middleware has already been executed
 		const cached = cache.get(input.ctx.request) ?? new Map()
 		if (cached.has(key)) {
-			const result = cached.get(key)
-
 			span?.setAttribute('procedure.cache.hit', true)
-			span?.end(performance.timeOrigin + performance.now())
-			return result
+			return cached.get(key)
 		}
 
 		// execute the middleware handler
@@ -146,9 +134,8 @@ export class Middleware<
 		// store the result in the cache, use null for void results
 		cached.set(key, result ?? null)
 		cache.set(input.ctx.request, cached)
-		
+
 		span?.setAttribute('procedure.cache.hit', false)
-		span?.end(performance.timeOrigin + performance.now())
 		return result
 	})
 }

@@ -250,26 +250,17 @@ export class Action<
 		params: Params extends ObjectSchema ? Static<Params> : any
 		query: Query extends ObjectSchema ? Static<Query> : any
 		body: Body extends ObjectSchema ? Static<Body> : any
-	}) => trace({
-		name: this.details?.tracing?.name ?? this.name,
-		op: 'procedure.action',
-		startTime: performance.timeOrigin + performance.now(),
-		attributes: {
-			'procedure.type': 'action',
-			'procedure.name': this.name,
-			...this.details?.tracing?.attributes
-		}
-	}, async span => {
+	}) => trace('action', this.details?.tracing?.name ?? this.name, {
+		'procedure.name': this.name,
+		...this.details?.tracing?.attributes
+	}, () => {
 		const { params, query, body, ...ctx } = context
 
-		const result = await this._execute(ctx, {
+		return this._execute(ctx, {
 			params: params,
 			query: query,
 			body: body,
 		})
-
-		span?.end(performance.timeOrigin + performance.now())
-		return result
 	})
 
 	/**
@@ -282,30 +273,16 @@ export class Action<
 		params: Params extends ObjectSchema ? Static<Params> : any,
 		query: Query extends ObjectSchema ? Static<Query> : any,
 		body: Body extends ObjectSchema ? Static<Body> : any,
-	}): Promise<Out> => trace({
-		name: this.details?.tracing?.name ?? this.name,
-		op: 'procedure.action',
-		startTime: performance.timeOrigin + performance.now(),
-		attributes: {
-			'procedure.type': 'action',
-			'procedure.name': this.name,
-			...this.details?.tracing?.attributes
-		}
-	}, async span => {
+	}): Promise<Out> => trace('action', this.details?.tracing?.name ?? this.name, {
+		'procedure.name': this.name,
+		...this.details?.tracing?.attributes
+	}, async () => {
 		let params = input.params
 		let query = input.query
 		let body = input.body
 
 		// validate the input
-		await trace({
-			name: this.details?.tracing?.name ?? this.name,
-			op: 'procedure.input',
-			startTime: performance.timeOrigin + performance.now(),
-			attributes: {
-				'procedure.type': 'input',
-				'procedure.name': this.name,
-			}
-		}, span => {
+		trace('input', this.details?.tracing?.name ?? this.name, { 'procedure.name': this.name }, () => {
 			// validate the params
 			if (this.params) {
 				params = this.params ? Value.Parse(this.params, input.params) : input.params
@@ -320,8 +297,6 @@ export class Action<
 			if (this.body) {
 				body = this.body ? Value.Parse(this.body, input.body) : input.body
 			}
-
-			span?.end(performance.timeOrigin + performance.now())
 		})
 
 		// run the action
@@ -332,29 +307,10 @@ export class Action<
 		})
 
 		// skip the output validation if no output schema is defined
-		if (!this.output) {
-			span?.end(performance.timeOrigin + performance.now())
-			return result
-		}
+		if (!this.output) return result
 
 		// validate the output
-		const output = await trace({
-			name: this.details?.tracing?.name ?? this.name,
-			op: 'procedure.output',
-			startTime: performance.timeOrigin + performance.now(),
-			attributes: {
-				'procedure.type': 'output',
-				'procedure.name': this.name,
-			}
-		}, span => {
-			const output = Value.Parse(this.output!, result)
-
-			span?.end(performance.timeOrigin + performance.now())
-			return output
-		})
-
-		span?.end(performance.timeOrigin + performance.now())
-		return output
+		return trace('output', this.details?.tracing?.name ?? this.name, { 'procedure.name': this.name }, () => Value.Parse(this.output!, result))
 	}) as Promise<Out>
 
 	private _execute = async (ctx: Context, input: {
@@ -370,25 +326,14 @@ export class Action<
 		}
 
 		// run the action
-		return await trace({
-			name: this.details?.tracing?.name ?? this.name,
-			op: 'procedure.handler',
-			startTime: performance.timeOrigin + performance.now(),
-			attributes: {
-				'procedure.type': 'handler',
-				'procedure.name': this.name,
-				...this.details?.tracing?.attributes
-			}
-		}, async span => {
-			const result = await this._handler({
-				params: input.params,
-				query: input.query,
-				body: input.body,
-				ctx: ctx as Ctx
-			}, this._onError)
-
-			span?.end(performance.timeOrigin + performance.now())
-			return result
-		})
+		return trace('handler', this.details?.tracing?.name ?? this.name, {
+			'procedure.name': this.name,
+			...this.details?.tracing?.attributes
+		}, () => this._handler({
+			params: input.params,
+			query: input.query,
+			body: input.body,
+			ctx: ctx as Ctx
+		}, this._onError))
 	}
 }

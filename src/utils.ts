@@ -1,6 +1,7 @@
 // import dependencies
 import { Type } from '@sinclair/typebox'
 import type { DocumentDecoration } from 'elysia'
+import type { Attributes } from '@opentelemetry/api'
 
 // import types
 import type { TObject, TProperties, TSchema } from '@sinclair/typebox'
@@ -68,7 +69,7 @@ export type Decorations<Errors extends ErrorTable = ErrorTable> =
 export type Config<Errors extends ErrorTable = ErrorTable> = {
 	tracing?: {
 		name?: string;
-		attributes?: Record<string, unknown>;
+		attributes?: Attributes;
 	};
 	errors?: ErrorConfig<Errors>;
 }

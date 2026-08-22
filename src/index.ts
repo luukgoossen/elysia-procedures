@@ -23,6 +23,10 @@ export type { ResolveProblemOptions } from './problems'
 
 export { procedures, procedureModels, sentryReporter } from './plugin'
 
-export type { ProceduresOptions, ProblemReporter } from './plugin'
+export type { ProceduresOptions, ProblemReporter, ProblemLogger, SentryReporterOptions, SentryLike } from './plugin'
+
+export { configureTracing } from './trace'
+
+export type { TracingOptions, SpanType } from './trace'
 
 export type { Context, Config, Decorations, ObjectSchema } from './utils'

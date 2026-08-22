@@ -19,7 +19,7 @@ A type-safe, composable procedure builder for [Elysia](https://elysiajs.com) wit
   - [The `procedures()` plugin](#the-procedures-plugin)
   - [Wire contract](#wire-contract)
   - [OpenAPI](#openapi)
-- [Telemetry](#telemetry)
+- [Tracing](#tracing)
 - [Type-checking performance](#type-checking-performance)
 - [Acknowledgments](#acknowledgments)
 
@@ -31,7 +31,8 @@ A type-safe, composable procedure builder for [Elysia](https://elysiajs.com) wit
 - 🧩 **Composable** - Create reusable procedures and middleware
 - 📚 **Documentation** - Co-locate your OpenAPI documentation with the handlers
 - 💾 **Caching** - Dependency-based request-level caching
-- 🚨 **Errors** - Typed error tables, RFC 9457 `application/problem+json` responses and a safe Sentry policy
+- 🚨 **Errors** - Typed error tables, RFC 9457 `application/problem+json` responses and pluggable error reporting
+- 🔭 **Tracing** - OpenTelemetry spans for every action, middleware and handler run
 - 🔗 **tRPC-style** - Familiar procedure-based patterns for type-safe APIs
 
 ## Installation
@@ -212,7 +213,7 @@ const getProductAction = productProcedure
 
 This library has first class support for integrating with the Elysia framework through the action.handle function, which expects an Elysia context, and action.docs which returns Elysia-formatted documentation defining the input and output schemas in a type-safe way.
 
-It also hooks into Elysia's OpenTelemetry plugin to add tracing to procedure and action runs, providing step by step information about the executed chain.
+With tracing enabled on the `procedures()` plugin it also adds OpenTelemetry spans to procedure and action runs, nested under Elysia's OpenTelemetry plugin (or any other SDK), providing step by step information about the executed chain. See [Tracing](#tracing).
 
 ```typescript
 import { Elysia } from "elysia";
@@ -356,6 +357,7 @@ const getVideo = baseProcedure
 ```typescript
 import { Elysia } from "elysia";
 import { procedures, sentryReporter } from "@luukgoossen/elysia-procedures";
+import * as Sentry from "@sentry/bun";
 
 const app = new Elysia()
   .use(
@@ -366,12 +368,14 @@ const app = new Elysia()
         // max characters of a field's `received` value echoed back; default 200
         receivedMaxLength: 200,
       },
-      // policy: how handled failures are reported and logged
+      // policy: how handled failures are reported, logged and traced
       observability: {
-        // reports failures and yields the `reference`; default: sentryReporter()
-        errorReporting: sentryReporter({ captureClientErrors: "warn" }),
+        // reports failures and yields the `reference`; default: none
+        errorReporting: sentryReporter(Sentry, { captureClientErrors: "warn" }),
         // default console.warn for 4xx and console.error for 5xx
         logging: (level, fields) => logger[level](fields),
+        // OpenTelemetry spans for every run; default: off
+        tracing: true,
       },
     }),
   )
@@ -389,7 +393,7 @@ const app = new Elysia()
 | redirects, thrown `Response`s, `status(...)`                  | as is      | untouched                               |
 | anything else, including a response failing the output schema | 500        | `INTERNAL` with default copy            |
 
-Reporting is a separate policy. The default `sentryReporter()` captures every 5xx problem as an exception (Sentry follows the `cause` chain) and, with `captureClientErrors`, 4xx `ApiError`s as messages; it loads `@sentry/bun` through a dynamic import and does nothing when it is not installed. Whatever the reporter returns becomes the problem's `reference`. Every handled failure logs a structured line `{ status, reason, instance, method, reference?, message? }`; the raw `message` only ever appears in the log, and only for 5xx.
+Reporting is a separate policy and off by default: nothing is captured and problems carry no `reference`. `sentryReporter(Sentry, options)` takes the Sentry SDK you initialized (any `@sentry/*` package exposing `captureException` and `captureMessage`) and captures every 5xx problem as an exception (Sentry follows the `cause` chain) and, with `captureClientErrors`, 4xx `ApiError`s as messages. Any `(error, problem) => string | undefined` works as a reporter, so other trackers plug in the same way. Whatever the reporter returns becomes the problem's `reference`. Every handled failure logs a structured line `{ status, reason, instance, method, reference?, message? }`; the raw `message` only ever appears in the log, and only for 5xx.
 
 Without the plugin nothing fails loudly, but you lose the contract: a thrown `ApiError` becomes a plain-text response with the right status, an unexpected `Error` is answered with its raw message (Elysia's default), validation failures use Elysia's own JSON shape, and the OpenAPI spec references `Problem` schemas that are never emitted. The `.get(path, action.handle, action.docs)` pattern above assumes the plugin is mounted.
 
@@ -400,7 +404,8 @@ Without the plugin nothing fails loudly, but you lose the contract: a thrown `Ap
 - `procedureModels()` registers the `Problem` and `ValidationProblem` models that `action.docs` reference and `ApiError` as a known error. Mount it instead of `procedures()`.
 - `resolveProblem(code, error, { instance?, errors?, receivedMaxLength? })` is the behaviour table above as a pure function: no reporting, no logging, never a raw message, and `undefined` for values that should pass through.
 - `problemResponse(problem)` serializes to `application/problem+json`.
-- `sentryReporter(options)` is the default reporter, reusable on its own.
+- `sentryReporter(sentry, options)` is the Sentry reporter, reusable on its own.
+- `configureTracing(options)` turns on tracing without the plugin, e.g. for actions run outside Elysia.
 
 ```typescript
 import { Elysia } from "elysia";
@@ -430,7 +435,7 @@ Every 4xx/5xx response produced by the plugin has `Content-Type: application/pro
   "instance": "/videos/abc",
   "reason": "NOT_FOUND", // stable key from the table
   "metadata": { "entity": "Video", "id": "abc" }, // validated by the entry's schema
-  "reference": "8c1f4d2e…" // Sentry event id, only when captured
+  "reference": "8c1f4d2e…" // whatever the reporter returned, e.g. a Sentry event id; only when captured
 }
 ```
 
@@ -457,9 +462,50 @@ Validation failures (422) are a `ValidationProblem`: the same members plus a req
 
 `action.docs.response` is keyed by status: `200` holds the output schema when one is defined, `422` references the `ValidationProblem` model, and every other status in the effective table (plus 500) references the shared `Problem` model. With `@elysiajs/openapi` this yields `components.schemas.Problem`, `components.schemas.ValidationProblem` and a `$ref` per documented status. `ApiError`, `Problem` and `ValidationProblem` are exported if you need to map problems onto other transports.
 
-## Telemetry
+## Tracing
 
-This package supports telemetry tracing. Both `@sentry/bun` and `@elysiajs/opentelemetry` are defined as optional peer dependencies. If either one is installed, telemetry traces will be made available. If both are installed, `@sentry/bun` takes priority over `@elysiajs/opentelemetry`.
+Tracing is built on the [OpenTelemetry API](https://www.npmjs.com/package/@opentelemetry/api) and nothing else, so it works with whichever SDK registers the global tracer provider: `@elysiajs/opentelemetry`, `@sentry/bun` (which is itself built on OpenTelemetry), or the OpenTelemetry Node SDK directly. Spans nest under the active span, so with Elysia's plugin every procedure run shows up inside its request span. Without a provider the API is a no-op.
+
+Tracing is off until you turn it on through the plugin:
+
+```typescript
+import { Elysia } from "elysia";
+import { opentelemetry } from "@elysiajs/opentelemetry";
+import { trace } from "@opentelemetry/api";
+import { procedures } from "@luukgoossen/elysia-procedures";
+
+const app = new Elysia()
+  .use(opentelemetry())
+  .use(
+    procedures({
+      observability: {
+        // true for the defaults, or:
+        tracing: {
+          // a tracer of your own; default: the global provider's tracer for this package
+          tracer: trace.getTracer("my-service"),
+          // which span types to emit; all default to true
+          spans: { input: false, output: false },
+          // attributes added to every span
+          attributes: { "service.layer": "api" },
+        },
+      },
+    }),
+  );
+```
+
+One span is emitted per step of a run. Every span carries `procedure.type`, `procedure.name`, the `attributes` from the action's or procedure's `tracing` config, and `sentry.op` (`procedure.<type>`), which Sentry reads as the operation and other backends ignore. The span name is the action's or procedure's `tracing.name`, or its name.
+
+| type         | wraps                                                     | extra attributes                              |
+| ------------ | --------------------------------------------------------- | --------------------------------------------- |
+| `action`     | one `action.handle()` or `action.run()` call              |                                               |
+| `middleware` | one procedure handler run                                 | `procedure.cache.hit` or `procedure.cache`    |
+| `handler`    | the action's own handler, after its middlewares           |                                               |
+| `input`      | input validation in `action.run()`                        |                                               |
+| `output`     | output validation in `action.run()`                       |                                               |
+
+Spans always end, also when the step throws. An unexpected error or a 5xx `ApiError` records the exception and sets the span status to error; a 4xx `ApiError` is an expected outcome and only sets `procedure.error.reason` and `procedure.error.status`.
+
+`configureTracing(options | boolean)` is what the plugin calls and is exported for running actions outside Elysia (scripts, queues). Since it configures the package globally, the last call wins; mount `procedures()` once.
 
 ## Type-checking performance
 

@@ -7,14 +7,10 @@ import { resolveProblem, problemResponse } from '@/problems'
 import { procedures, procedureModels, sentryReporter } from '@/plugin'
 import { ApiError } from '@/error'
 
-// mock the optional sentry dependency
+// a stand-in for a sentry sdk
 const captureException = mock(() => 'event-id-exception')
 const captureMessage = mock(() => 'event-id-message')
-mock.module('@sentry/bun', () => ({
-	captureException,
-	captureMessage,
-	startSpanManual: (_options: unknown, fn: (span?: unknown) => unknown) => fn(),
-}))
+const Sentry = { captureException, captureMessage }
 
 const logs: { level: string; fields: Record<string, unknown> }[] = []
 const log = (level: 'warn' | 'error', fields: Record<string, unknown>) => { logs.push({ level, fields }) }
@@ -46,7 +42,7 @@ const create = base.createAction('Create Video').body(t.Object({
 const boom = base.createAction('Boom').build(() => { throw new Error('db exploded') })
 
 const build = (options?: Parameters<typeof procedures>[0]) => new Elysia()
-	.use(procedures({ ...options, observability: { logging: log, ...options?.observability } }))
+	.use(procedures({ ...options, observability: { logging: log, errorReporting: sentryReporter(Sentry), ...options?.observability } }))
 	.get('/videos/:id', notFound.handle, notFound.docs)
 	.get('/upstream', upstream.handle, upstream.docs)
 	.get('/wrapped', wrapped.handle, wrapped.docs)
@@ -161,7 +157,7 @@ describe('procedures() plugin', () => {
 	})
 
 	test('treats response validation failures as server errors', async () => {
-		const app = new Elysia().use(procedures({ observability: { logging: log } })).get('/r', () => ({ id: 1 }) as any, { response: t.Object({ id: t.String() }) })
+		const app = new Elysia().use(procedures({ observability: { logging: log, errorReporting: sentryReporter(Sentry) } })).get('/r', () => ({ id: 1 }) as any, { response: t.Object({ id: t.String() }) })
 		const res = await request(app, '/r')
 		const body: any = await res.json()
 
@@ -225,14 +221,14 @@ describe('procedures() plugin', () => {
 	})
 
 	test('captureClientErrors reports 4xx ApiErrors as messages', async () => {
-		await request(build({ observability: { errorReporting: sentryReporter({ captureClientErrors: 'warn' }) } }), '/videos/abc')
+		await request(build({ observability: { errorReporting: sentryReporter(Sentry, { captureClientErrors: 'warn' }) } }), '/videos/abc')
 		expect(captureMessage).toHaveBeenCalledTimes(1)
 		expect(captureMessage.mock.calls[0] as unknown[]).toEqual(['Video not found', { level: 'warning', tags: { reason: 'NOT_FOUND', status: 404 } }])
 
-		await request(build({ observability: { errorReporting: sentryReporter({ captureClientErrors: 'all' }) } }), '/videos/abc')
+		await request(build({ observability: { errorReporting: sentryReporter(Sentry, { captureClientErrors: 'all' }) } }), '/videos/abc')
 		expect((captureMessage.mock.calls[1] as unknown[])[1]).toMatchObject({ level: 'info' })
 
-		await request(build({ observability: { errorReporting: sentryReporter({ captureClientErrors: 'off' }) } }), '/videos/abc')
+		await request(build({ observability: { errorReporting: sentryReporter(Sentry, { captureClientErrors: 'off' }) } }), '/videos/abc')
 		expect(captureMessage).toHaveBeenCalledTimes(2)
 	})
 
@@ -271,6 +267,16 @@ describe('procedures() plugin', () => {
 })
 
 describe('bring your own handler', () => {
+	test('reports nothing and yields no reference without a reporter', async () => {
+		const app = new Elysia().use(procedures({ observability: { logging: log } })).get('/boom', boom.handle, boom.docs)
+		const res = await request(app, '/boom')
+
+		expect(res.status).toBe(500)
+		expect(((await res.json()) as any).reference).toBeUndefined()
+		expect(captureException).not.toHaveBeenCalled()
+		expect(logs[0]?.fields).not.toHaveProperty('reference')
+	})
+
 	test('a custom reporter replaces the sentry policy', async () => {
 		const seen: unknown[] = []
 		const report = mock((error: unknown) => { seen.push(error); return 'custom-ref' })
