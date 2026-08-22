@@ -69,7 +69,7 @@ export const sentryReporter = (sentry: SentryLike, options: SentryReporterOption
 		const tags = { reason: problem.reason, status: problem.status }
 
 		if (problem.status >= 500) return sentry.captureException(error, { tags })
-		if (error instanceof ApiError && capture !== 'off') {
+		if (ApiError.is(error) && capture !== 'off') {
 			sentry.captureMessage(error.title, { level: capture === 'warn' ? 'warning' : 'info', tags })
 		}
 		return undefined
@@ -78,7 +78,7 @@ export const sentryReporter = (sentry: SentryLike, options: SentryReporterOption
 
 /** The message to log for a failure. It goes to the log only, never into the response */
 const messageOf = (error: unknown) => {
-	if (error instanceof ApiError) return error.cause instanceof Error ? error.cause.message : error.message
+	if (ApiError.is(error)) return error.cause instanceof Error ? error.cause.message : error.message
 	return error instanceof Error ? error.message : String(error)
 }
 

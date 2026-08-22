@@ -12,17 +12,17 @@ import type { Simplify } from 'type-fest'
  */
 export type ErrorEntry<M extends ObjectSchema | undefined = undefined> = {
 	/** HTTP status code of the error */
-	status: number;
+	status: number
 	/** TypeBox schema for the metadata argument of onError(); without it the error takes no metadata */
-	metadata?: M;
+	metadata?: M
 	/** Default title, as a string or a function of the validated metadata */
 	title?:
 	| string
-	| ((metadata: M extends ObjectSchema ? Static<M> : undefined) => string);
+	| ((metadata: M extends ObjectSchema ? Static<M> : undefined) => string)
 	/** Default detail, same shape as title */
 	detail?:
 	| string
-	| ((metadata: M extends ObjectSchema ? Static<M> : undefined) => string);
+	| ((metadata: M extends ObjectSchema ? Static<M> : undefined) => string)
 }
 
 /**
@@ -40,9 +40,9 @@ export type NoErrors = Record<never, never>
  */
 export type ErrorConfig<Errors extends ErrorTable = ErrorTable> = {
 	/** Builds the RFC 9457 `type` URI for a reason; defaults to 'about:blank' for every reason */
-	type?: (reason: string) => string;
+	type?: (reason: string) => string
 	/** Error table, merged by key with the parent's; the child's entry wins */
-	table?: Errors;
+	table?: Errors
 }
 
 /**
@@ -79,10 +79,7 @@ export type ProblemFieldLocation = Static<typeof ProblemFieldLocation>
  */
 export const ProblemFieldError = Type.Object({
 	in: ProblemFieldLocation,
-	pointer: Type.String({
-		description:
-      'JSON pointer fragment to the invalid value within its location, e.g. #/tags/1',
-	}),
+	pointer: Type.String({ description: 'JSON pointer fragment to the invalid value within its location, e.g. #/tags/1' }),
 	detail: Type.String(),
 	received: Type.Optional(Type.String({ description: 'JSON of the received value; omitted for sensitive fields, truncated when long' })),
 })
@@ -90,29 +87,14 @@ export const ProblemFieldError = Type.Object({
 export type ProblemFieldError = Static<typeof ProblemFieldError>
 
 const problemProperties = {
-	type: Type.String({
-		description: 'URI reference identifying the problem type',
-	}),
-	title: Type.String({
-		description: 'Short, human-readable summary of the problem type',
-	}),
+	type: Type.String({ description: 'URI reference identifying the problem type' }),
+	title: Type.String({ description: 'Short, human-readable summary of the problem type' }),
 	status: Type.Integer({ minimum: 100, maximum: 599 }),
-	detail: Type.Optional(
-		Type.String({
-			description: 'Human-readable explanation specific to this occurrence',
-		}),
-	),
-	instance: Type.Optional(
-		Type.String({ description: 'Request path that produced the problem' }),
-	),
+	detail: Type.Optional(Type.String({ description: 'Human-readable explanation specific to this occurrence' })),
+	instance: Type.Optional(Type.String({ description: 'Request path that produced the problem' })),
 	reason: Type.String({ description: 'Stable UPPER_SNAKE error code' }),
 	metadata: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
-	reference: Type.Optional(
-		Type.String({
-			description:
-        'Error tracking reference, present when the error was reported',
-		}),
-	),
+	reference: Type.Optional(Type.String({ description: 'Error tracking reference, present when the error was reported' })),
 }
 
 /**
@@ -125,13 +107,10 @@ export type Problem = Static<typeof Problem>
 /**
  * A 422 problem carrying one entry per invalid field.
  */
-export const ValidationProblem = Type.Object(
-	{
-		...problemProperties,
-		errors: Type.Array(ProblemFieldError),
-	},
-	{ $id: 'ValidationProblem' },
-)
+export const ValidationProblem = Type.Object({
+	...problemProperties,
+	errors: Type.Array(ProblemFieldError),
+}, { $id: 'ValidationProblem' })
 
 export type ValidationProblem = Static<typeof ValidationProblem>
 
@@ -139,26 +118,30 @@ export type ValidationProblem = Static<typeof ValidationProblem>
  * Extension members that can be merged into a problem at serialization time.
  */
 export type ProblemExtra = {
-	instance?: string;
-	reference?: string;
+	instance?: string
+	reference?: string
 }
 
 /**
  * Options accepted by the onError factory for a single occurrence.
  */
 export type ApiErrorOptions = {
-	title?: string;
-	detail?: string;
-	cause?: unknown;
+	title?: string
+	detail?: string
+	cause?: unknown
 }
+
+/**
+ * Brand marking ApiErrors. Created with Symbol.for so every copy of this package, e.g. the CJS build loaded next to
+ * the ESM build, shares it; an `instanceof` check would fail across copies and turn a typed error into a 500.
+ */
+const API_ERROR: unique symbol = Symbol.for('elysia-procedures.ApiError')
 
 /**
  * An error thrown by a handler. The procedures() plugin serializes it to an RFC 9457 problem.
  */
-export class ApiError<
-	Reason extends string = string,
-	Meta = unknown,
-> extends Error {
+export class ApiError<Reason extends string = string, Meta = unknown> extends Error {
+	readonly [API_ERROR] = true
 	readonly status: number
 	readonly reason: Reason
 	readonly metadata: Meta
@@ -167,18 +150,15 @@ export class ApiError<
 	readonly type: string
 
 	constructor(input: {
-		status: number;
-		reason: Reason;
-		metadata: Meta;
-		title: string;
-		detail?: string;
-		type: string;
-		cause?: unknown;
+		status: number
+		reason: Reason
+		metadata: Meta
+		title: string
+		detail?: string
+		type: string
+		cause?: unknown
 	}) {
-		super(
-			input.title,
-			input.cause === undefined ? undefined : { cause: input.cause },
-		)
+		super(input.title, input.cause === undefined ? undefined : { cause: input.cause })
 		this.name = 'ApiError'
 		this.status = input.status
 		this.reason = input.reason
@@ -189,9 +169,18 @@ export class ApiError<
 	}
 
 	/**
-   * Serializes the error to an RFC 9457 problem. The cause is never included.
-   * @param extra - Extension members (instance, reference) to merge
-   */
+	 * Whether the value is an ApiError. Prefer this over `instanceof`: it also holds for errors created by another
+	 * copy of this package.
+	 * @param value - The value to check
+	 */
+	static is(value: unknown): value is ApiError {
+		return typeof value === 'object' && value !== null && (value as Record<symbol, unknown>)[API_ERROR] === true
+	}
+
+	/**
+	 * Serializes the error to an RFC 9457 problem. The cause is never included.
+	 * @param extra - Extension members (instance, reference) to merge
+	 */
 	public toProblem = (extra: ProblemExtra = {}): Problem => {
 		const problem: Problem = {
 			type: this.type,
@@ -213,8 +202,7 @@ export class ApiError<
 /**
  * Metadata type of an error table entry.
  */
-export type ErrorMetadata<E extends ErrorEntry<any>> =
-  E['metadata'] extends ObjectSchema ? Static<E['metadata']> : undefined
+export type ErrorMetadata<E extends ErrorEntry<any>> = E['metadata'] extends ObjectSchema ? Static<E['metadata']> : undefined
 
 /**
  * Arguments of the onError factory after the reason: metadata is required if the entry has a schema.
@@ -232,12 +220,12 @@ export type ErrorFactory<Errors extends ErrorTable> = {
 	<R extends keyof MergedErrors<DefaultErrors, Errors> & string>(
 		reason: R,
 		...args: ErrorArgs<MergedErrors<DefaultErrors, Errors>[R]>
-	): ApiError<R, ErrorMetadata<MergedErrors<DefaultErrors, Errors>[R]>>;
+	): ApiError<R, ErrorMetadata<MergedErrors<DefaultErrors, Errors>[R]>>
 	/** Wraps an unexpected failure in a 5xx error. The cause reaches the reporter and the log, never the response */
 	unexpected(
 		cause: unknown,
 		options?: ApiErrorOptions & { reason?: keyof Errors & string },
-	): ApiError<string, undefined>;
+	): ApiError<string, undefined>
 }
 
 /** Converts UPPER_SNAKE to Title Case */
@@ -291,10 +279,7 @@ export const createErrorFactory = <Errors extends ErrorTable>(
 			status: entry.status,
 			reason,
 			metadata,
-			title:
-        options.title ??
-        resolveCopy(entry.title, metadata) ??
-        toTitleCase(reason),
+			title: options.title ?? resolveCopy(entry.title, metadata) ?? toTitleCase(reason),
 			detail: options.detail ?? resolveCopy(entry.detail, metadata),
 			type: typeOf(reason),
 			cause: options.cause,
@@ -367,26 +352,26 @@ export const statusesOf = (table: ErrorTable): number[] =>
  * @param entry - The error entry
  */
 export function defineError<const S extends number, M extends ObjectSchema>(entry: {
-	status: S;
-	metadata: M;
-	title?: string | ((metadata: Static<M>) => string);
-	detail?: string | ((metadata: Static<M>) => string);
+	status: S
+	metadata: M
+	title?: string | ((metadata: Static<M>) => string)
+	detail?: string | ((metadata: Static<M>) => string)
 }): {
-	status: S;
-	metadata: M;
-	title?: string | ((metadata: Static<M>) => string);
-	detail?: string | ((metadata: Static<M>) => string);
+	status: S
+	metadata: M
+	title?: string | ((metadata: Static<M>) => string)
+	detail?: string | ((metadata: Static<M>) => string)
 }
 export function defineError<const S extends number>(entry: {
-	status: S;
-	metadata?: undefined;
-	title?: string | (() => string);
-	detail?: string | (() => string);
+	status: S
+	metadata?: undefined
+	title?: string | (() => string)
+	detail?: string | (() => string)
 }): {
-	status: S;
-	metadata?: undefined;
-	title?: string | (() => string);
-	detail?: string | (() => string);
+	status: S
+	metadata?: undefined
+	title?: string | (() => string)
+	detail?: string | (() => string)
 }
 export function defineError(entry: ErrorEntry<any>) {
 	return entry

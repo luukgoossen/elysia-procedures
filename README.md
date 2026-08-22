@@ -478,7 +478,7 @@ Validation failures (422) are a `ValidationProblem`, which has the same members 
 }
 ```
 
-Some things never reach the client. `title` and `detail` never contain the raw message of an unexpected error, and `cause` never serializes. `received` is left out when any segment of the pointer matches `/password|secret|token|key/i` or when the value has no JSON form, such as a missing property or a file. Otherwise it is cut off at `receivedMaxLength` characters.
+Some things never reach the client. `title` and `detail` never contain the raw message of an unexpected error, and `cause` never serializes. `received` is left out when any segment of the pointer matches `/password|secret|token|key/i` or when the value has no JSON form, such as a missing property or a file. When an error is reported on an object, properties matching that pattern at any depth are replaced with `"[redacted]"`. Otherwise it is cut off at `receivedMaxLength` characters.
 
 A response that fails the action's output schema is a server bug, not a client error. It is reported and answered with a 500 `INTERNAL` problem, not a 422.
 

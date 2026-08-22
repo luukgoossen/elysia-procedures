@@ -1,7 +1,7 @@
 // import dependencies
 import { describe, test, expect, mock } from 'bun:test'
 import { Type } from '@sinclair/typebox'
-import { createProcedure } from '@/procedure'
+import { createProcedure, Procedure } from '@/procedure'
 
 describe('Basic Procedure Creation', () => {
 	test('should create a procedure with name', () => {
@@ -185,6 +185,42 @@ describe('Middleware Execution', () => {
 		expect(mockHandler).toHaveBeenCalledTimes(2)
 		expect(resultOne).toEqual({ processed: true })
 		expect(resultTwo).toEqual({ processed: true })
+	})
+
+	test('should not confuse keys that join to the same string', async () => {
+		const mockHandler = mock(() => ({ processed: true }))
+
+		const procedure = createProcedure('Test Procedure')
+			.params(Type.Object({ keys: Type.Array(Type.String()) }))
+			.cache(({ params }) => params.keys)
+			.build(mockHandler)
+
+		const request = new Request('https://example.com')
+		await procedure.middlewares[0]?.execute({ ctx: { request }, params: { keys: ['a,b'] }, query: undefined, body: undefined })
+		await procedure.middlewares[0]?.execute({ ctx: { request }, params: { keys: ['a', 'b'] }, query: undefined, body: undefined })
+
+		expect(mockHandler).toHaveBeenCalledTimes(2)
+	})
+})
+
+describe('Procedure.is', () => {
+	test('recognizes procedures by brand rather than prototype', () => {
+		const procedure = createProcedure('Test Procedure').build()
+		const foreign = Object.assign(Object.create(null), procedure, { [Symbol.for('elysia-procedures.Procedure')]: true })
+
+		expect(Procedure.is(procedure)).toBe(true)
+		expect(Procedure.is(foreign)).toBe(true)
+		expect(Procedure.is({ middlewares: [] })).toBe(false)
+		expect(Procedure.is(null)).toBe(false)
+	})
+
+	test('createProcedure keeps the middlewares of a base from another copy of the package', () => {
+		const base = createProcedure('Base').build(() => ({ authenticated: true }))
+		const foreign = Object.assign(Object.create(null), base, { [Symbol.for('elysia-procedures.Procedure')]: true })
+
+		const child = createProcedure('Child', foreign as typeof base).build()
+		expect(child.middlewares).toHaveLength(1)
+		expect(child.middlewares[0]).toBe(base.middlewares[0])
 	})
 })
 

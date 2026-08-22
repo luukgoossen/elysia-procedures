@@ -12,6 +12,11 @@ module.exports = {
 	rules: {
 		'quotes': ['warn', 'single', { avoidEscape: true, allowTemplateLiterals: true }],
 		'@stylistic/semi': ['warn', 'never'],
+		'@stylistic/member-delimiter-style': ['warn', {
+			multiline: { delimiter: 'none' },
+			singleline: { delimiter: 'comma', requireLast: false },
+		}],
+		'no-mixed-spaces-and-tabs': 'warn',
 		'padded-blocks': 'off',
 		'no-trailing-spaces': ['warn', { skipBlankLines: true }],
 		'no-tabs': 'off',

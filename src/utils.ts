@@ -44,8 +44,8 @@ export const merge = <
  */
 export type Context = {
 	/** The received HTTP request */
-	request: Request;
-	cookie: Record<string, Cookie<unknown>>;
+	request: Request
+	cookie: Record<string, Cookie<unknown>>
 }
 
 /**
@@ -55,23 +55,22 @@ export type Context = {
  * schema's `static` type (TypeBox's `ObjectStatic`) on every check. Checking against this alias only compares `type`
  * and `properties`, around forty times cheaper, and still rejects non-object schemas. Any `TObject<...>` satisfies it.
  */
-export type ObjectSchema = TSchema & { type: 'object'; properties: TProperties }
+export type ObjectSchema = TSchema & { type: 'object', properties: TProperties }
 
 /**
  * API documentation details for an action or procedure.
  */
-export type Decorations<Errors extends ErrorTable = ErrorTable> =
-  DocumentDecoration & Config<Errors>
+export type Decorations<Errors extends ErrorTable = ErrorTable> = DocumentDecoration & Config<Errors>
 
 /**
  * Tracing and error configuration for an action or procedure.
  */
 export type Config<Errors extends ErrorTable = ErrorTable> = {
 	tracing?: {
-		name?: string;
-		attributes?: Attributes;
-	};
-	errors?: ErrorConfig<Errors>;
+		name?: string
+		attributes?: Attributes
+	}
+	errors?: ErrorConfig<Errors>
 }
 
 /**

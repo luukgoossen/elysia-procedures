@@ -274,9 +274,9 @@ export class Action<
 	 * @returns
 	 */
 	public run = async (ctx: Context, input: {
-		params: Params extends ObjectSchema ? Static<Params> : any,
-		query: Query extends ObjectSchema ? Static<Query> : any,
-		body: Body extends ObjectSchema ? Static<Body> : any,
+		params: Params extends ObjectSchema ? Static<Params> : any
+		query: Query extends ObjectSchema ? Static<Query> : any
+		body: Body extends ObjectSchema ? Static<Body> : any
 	}): Promise<Out> => trace('action', this.details?.tracing?.name ?? this.name, {
 		'procedure.name': this.name,
 		...this.details?.tracing?.attributes
@@ -318,9 +318,9 @@ export class Action<
 	}) as Promise<Out>
 
 	private _execute = async (ctx: Context, input: {
-		params: Params extends ObjectSchema ? Static<Params> : any,
-		query: Query extends ObjectSchema ? Static<Query> : any,
-		body: Body extends ObjectSchema ? Static<Body> : any,
+		params: Params extends ObjectSchema ? Static<Params> : any
+		query: Query extends ObjectSchema ? Static<Query> : any
+		body: Body extends ObjectSchema ? Static<Body> : any
 	}): Promise<Out> => {
 
 		// run the middlewares

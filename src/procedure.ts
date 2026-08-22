@@ -12,7 +12,7 @@ import type { ErrorFactory, ErrorTable, MergedErrors, NoErrors } from './error'
 
 // define a local middleware cache
 const cache = new WeakMap<Request, Map<string, any>>()
-const cacheKey = (id: string, array: string[]) => `${id}:[${array.join(',')}]`
+const cacheKey = (id: string, keys: string[]) => `${id}:${JSON.stringify(keys)}`
 
 /**
  * Configuration arguments for creating a procedure.
@@ -236,6 +236,13 @@ export class ProcedureBuilder<
 
 
 /**
+ * Brand marking procedures. Created with Symbol.for so every copy of this package shares it; an `instanceof` check
+ * would fail across copies and make createProcedure() silently treat a base procedure as config, dropping its
+ * middlewares.
+ */
+const PROCEDURE: unique symbol = Symbol.for('elysia-procedures.Procedure')
+
+/**
  * A procedure acts as a base for creating actions.
  * It predefines and handles parameters, query, body, and middlewares.
  * The procedure can be extended to create more specific procedures
@@ -248,6 +255,7 @@ export class Procedure<
 	Body extends ObjectSchema | undefined,
 	Errors extends ErrorTable = NoErrors
 > {
+	readonly [PROCEDURE] = true
 	/** TypeBox schema for route parameters */
 	params: Params
 	/** TypeBox schema for query parameters */
@@ -265,6 +273,15 @@ export class Procedure<
 		this.body = base.body
 		this.middlewares = base.middlewares
 		this.config = base.config
+	}
+
+	/**
+	 * Whether the value is a Procedure. Prefer this over `instanceof`: it also holds for procedures created by another
+	 * copy of this package.
+	 * @param value - The value to check
+	 */
+	static is(value: unknown): value is Procedure<any, any, any, any, any> {
+		return typeof value === 'object' && value !== null && (value as Record<symbol, unknown>)[PROCEDURE] === true
 	}
 
 	/**
@@ -320,7 +337,7 @@ export function createProcedure<
 	const ConfigErrors extends ErrorTable = NoErrors
 >(name: string, base?: Procedure<Ctx, Params, Query, Body, BaseErrors>, config?: Config<ConfigErrors>): ProcedureBuilder<Ctx, Params, Query, Body, MergedErrors<BaseErrors, ConfigErrors>>
 export function createProcedure(name: string, baseOrConfig?: Procedure<any, any, any, any, any> | Config<any>, config: Config<any> = {}) {
-	const base = baseOrConfig instanceof Procedure ? baseOrConfig : undefined
+	const base = Procedure.is(baseOrConfig) ? baseOrConfig : undefined
 	if (baseOrConfig && !base) config = baseOrConfig as Config<any>
 
 	return new ProcedureBuilder({

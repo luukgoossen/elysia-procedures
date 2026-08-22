@@ -12,7 +12,7 @@ const captureException = mock(() => 'event-id-exception')
 const captureMessage = mock(() => 'event-id-message')
 const Sentry = { captureException, captureMessage }
 
-const logs: { level: string; fields: Record<string, unknown> }[] = []
+const logs: { level: string, fields: Record<string, unknown> }[] = []
 const log = (level: 'warn' | 'error', fields: Record<string, unknown>) => { logs.push({ level, fields }) }
 
 const base = createProcedure('Base', {
@@ -141,6 +141,34 @@ describe('procedures() plugin', () => {
 		expect(body.errors.find((e: { pointer: string }) => e.pointer === '#/password').received).toBeUndefined()
 		expect(body.errors.find((e: { pointer: string }) => e.pointer === '#/tags/0').received).toBe('1')
 		expect(body.errors.find((e: { pointer: string }) => e.pointer === '#/name')).toBeUndefined()
+	})
+
+	test('redacts sensitive properties nested inside an echoed object', async () => {
+		const app = new Elysia()
+			.use(procedures({ observability: { logging: log } }))
+			.post('/login', () => 'ok', {
+				body: t.Object({
+					credentials: t.Union([
+						t.Object({ username: t.String(), password: t.String() }),
+						t.Object({ apiToken: t.String() }),
+					]),
+				}),
+			})
+
+		const res = await request(app, '/login', {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ credentials: { username: 'luuk', password: 12345678, nested: { secretKey: 's3', ok: 1 } } }),
+		})
+		const body = await res.json() as { errors: { pointer: string, received?: string }[] }
+
+		expect(res.status).toBe(422)
+		const field = body.errors.find(e => e.pointer === '#/credentials')
+		expect(field?.received).toContain('"username":"luuk"')
+		expect(field?.received).toContain('"password":"[redacted]"')
+		expect(field?.received).toContain('"secretKey":"[redacted]"')
+		expect(field?.received).not.toContain('12345678')
+		expect(field?.received).not.toContain('s3')
 	})
 
 	test('omits received for missing properties and maps locations', async () => {

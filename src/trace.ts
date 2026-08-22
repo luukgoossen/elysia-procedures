@@ -57,7 +57,7 @@ export const configureTracing = (options: TracingOptions | boolean = true) => {
 
 /** Marks the span for a failure. A 4xx ApiError is an expected outcome and does not fail the span; everything else does */
 const fail = (span: Span, error: unknown) => {
-	if (error instanceof ApiError && error.status < 500) {
+	if (ApiError.is(error) && error.status < 500) {
 		span.setAttribute('procedure.error.reason', error.reason)
 		span.setAttribute('procedure.error.status', error.status)
 		return

@@ -52,6 +52,18 @@ describe('ApiError', () => {
 	})
 })
 
+describe('ApiError.is', () => {
+	test('recognizes errors by brand rather than prototype', () => {
+		const error = new ApiError({ status: 404, reason: 'NOT_FOUND', metadata: undefined, title: 'Not found', type: 'about:blank' })
+		const foreign = Object.assign(new Error('Not found'), { status: 404, [Symbol.for('elysia-procedures.ApiError')]: true })
+
+		expect(ApiError.is(error)).toBe(true)
+		expect(ApiError.is(foreign)).toBe(true)
+		expect(ApiError.is(new Error('Not found'))).toBe(false)
+		expect(ApiError.is(undefined)).toBe(false)
+	})
+})
+
 describe('mergeErrors', () => {
 	test('child keys win and type is inherited', () => {
 		const parent = { type: (r: string) => `/p/${r}`, table: { A: { status: 400, title: 'parent' }, B: { status: 401 } } }

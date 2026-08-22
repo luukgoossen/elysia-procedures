@@ -18,16 +18,26 @@ export type ResolveProblemOptions = {
 	receivedMaxLength?: number
 }
 
-/** Pointer segments whose value is never echoed back */
+/** Pointer segments and property names whose value is never echoed back */
 const SENSITIVE = /password|secret|token|key/i
 
-/** Serializes a received value as JSON. Returns undefined for sensitive fields and values without a JSON form, and truncates long values */
+/** Placeholder for redacted properties inside an echoed object */
+const REDACTED = '[redacted]'
+
+/** Replaces sensitive properties, at any depth, while JSON.stringify walks the value */
+const redact = (key: string, value: unknown) => (SENSITIVE.test(key) ? REDACTED : value)
+
+/**
+ * Serializes a received value as JSON. Returns undefined for sensitive fields and values without a JSON form, and
+ * truncates long values. Sensitive properties nested inside an object are replaced, so an error reported at the
+ * object level never echoes a secret either.
+ */
 const describeReceived = (pointer: string, value: unknown, max: number): string | undefined => {
 	if (pointer.split('/').some(segment => SENSITIVE.test(segment))) return undefined
 
 	let json: string | undefined
 	try {
-		json = JSON.stringify(value)
+		json = JSON.stringify(value, redact)
 	} catch {
 		return undefined
 	}
@@ -105,7 +115,7 @@ export const resolveProblem = (code: string | number, error: unknown, options: R
 	const onError = factoryFor(options.errors)
 	const max = options.receivedMaxLength ?? 200
 
-	if (error instanceof ApiError) return error.toProblem({ instance })
+	if (ApiError.is(error)) return error.toProblem({ instance })
 
 	if (code === 'VALIDATION' && isRequestValidation(error as ValidationError)) {
 		const errors = fieldErrors(error as ValidationError, max)
