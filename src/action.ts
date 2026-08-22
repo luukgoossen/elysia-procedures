@@ -10,7 +10,7 @@ import type { Promisable, Simplify } from 'type-fest'
 import type { ProcedureFnArgs, AnyMiddleware } from './procedure'
 import type { Context, ObjectSchema, SafeTObject, MergedObject, Decorations } from './utils'
 import type { DocumentDecoration } from 'elysia'
-import type { ErrorFactory, ErrorTable, DefaultErrors, NoErrors } from './error'
+import type { ErrorFactory, ErrorTable, DefaultErrors, NoErrors, Problem, ValidationProblem } from './error'
 
 /**
  * Configuration arguments for creating an action builder.
@@ -68,7 +68,9 @@ export type ActionFn<
 
 /**
  * The status-keyed response schemas documented for an action: the output under 200, `ValidationProblem` under 422 and `Problem` per other error status.
- * Both models are registered by the problems() plugin, which must be mounted on the app.
+ * At runtime the error entries are the model names `'Problem'` / `'ValidationProblem'`, which Elysia resolves from the models the problems() plugin
+ * registers on the root app and which `@elysiajs/openapi` emits as `$ref`s. They are typed as the schemas themselves so routes typecheck on any
+ * instance, not only on those whose type carries the models.
  * Error statuses are only typed when the table keeps them literal (inline literals or `defineError`); a widened `number` status documents nothing at the type level.
  */
 export type ActionResponses<Output extends TSchema | undefined, Errors extends ErrorTable> = Simplify<
@@ -76,7 +78,7 @@ export type ActionResponses<Output extends TSchema | undefined, Errors extends E
 & ErrorResponses<(Errors[keyof Errors] | DefaultErrors[keyof DefaultErrors])['status']>
 >
 
-type ErrorResponses<Status extends number> = number extends Status ? unknown : { [S in Status]: S extends 422 ? 'ValidationProblem' : 'Problem' }
+type ErrorResponses<Status extends number> = number extends Status ? unknown : { [S in Status]: S extends 422 ? typeof ValidationProblem : typeof Problem }
 
 /**
  * Builder class for creating actions with a type-safe API.

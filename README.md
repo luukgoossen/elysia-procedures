@@ -351,7 +351,7 @@ const getVideo = baseProcedure
 
 ### The `problems()` plugin
 
-Mount the plugin on your Elysia app. It registers the `Problem` model (which `action.docs` references) and an `onError` hook that serializes every failure. It is idempotent, so use it on every instance that mounts actions.
+Mount the plugin **once, on the root app, before any sub-apps**. It registers the `Problem` and `ValidationProblem` models that `action.docs` reference and a global `onError` hook that serializes every failure. Elysia applies global hooks to every route registered after them, at any nesting depth, so sub-apps need nothing; a sub-app `.use()`d *before* the plugin is not covered.
 
 ```typescript
 import { Elysia } from "elysia";
@@ -386,6 +386,8 @@ const app = new Elysia()
 | anything else                                  | 500        | `captureException`                                 | `INTERNAL` with default copy and a `reference` |
 
 Sentry is loaded through a dynamic import of `@sentry/bun` and skipped when it is not installed. Every branch logs a structured line `{ status, reason, instance, method, reference?, message? }`; the raw `message` only ever appears in the log.
+
+Without the plugin nothing fails loudly, but you lose the contract: a thrown `ApiError` becomes a plain-text response with the right status, an unexpected `Error` is answered with its raw message (Elysia's default), validation failures use Elysia's own JSON shape, and the OpenAPI spec references `Problem` schemas that are never emitted. The `.get(path, action.handle, action.docs)` pattern above assumes the plugin is mounted.
 
 ### Wire contract
 

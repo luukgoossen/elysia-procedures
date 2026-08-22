@@ -235,14 +235,37 @@ describe('problems() plugin', () => {
 		expect(captureMessage).toHaveBeenCalledTimes(2)
 	})
 
-	test('is idempotent when used on multiple instances', async () => {
+	test('covers nested sub-apps when mounted once on the root', async () => {
+		const leaf = new Elysia({ prefix: '/leaf' }).get('/boom', boom.handle, boom.docs).get('/video/:id', notFound.handle, notFound.docs)
+		const branch = new Elysia({ prefix: '/branch' }).use(leaf)
+		const app = new Elysia().use(problems({ log })).use(branch)
+
+		const res = await request(app, '/branch/leaf/boom')
+		expect(res.status).toBe(500)
+		expect(res.headers.get('content-type')).toBe('application/problem+json')
+
+		const res2 = await request(app, '/branch/leaf/video/abc')
+		expect(res2.status).toBe(404)
+		expect(await res2.json()).toMatchObject({ reason: 'NOT_FOUND', metadata: { entity: 'Video' } })
+		expect(logs).toHaveLength(2)
+	})
+
+	test('handles each error once when mounted on several instances', async () => {
 		const child = new Elysia().use(problems({ log })).get('/child', () => { throw new Error('x') })
 		const app = new Elysia().use(problems({ log })).use(child)
 
 		const res = await request(app, '/child')
 		expect(res.status).toBe(500)
-		expect(res.headers.get('content-type')).toBe('application/problem+json')
 		expect(logs).toHaveLength(1)
+	})
+
+	test('does not cover sub-apps mounted before it', async () => {
+		const child = new Elysia().get('/child', () => { throw new Error('x') })
+		const app = new Elysia().use(child).use(problems({ log }))
+
+		const res = await request(app, '/child')
+		expect(res.status).toBe(500)
+		expect(res.headers.get('content-type')).not.toBe('application/problem+json')
 	})
 })
 

@@ -7,7 +7,7 @@ import { defineError } from '../src/error'
 // import types
 import type { Procedure } from '../src/procedure'
 import type { Action } from '../src/action'
-import type { ApiError } from '../src/error'
+import type { ApiError, Problem, ValidationProblem } from '../src/error'
 import type { TObject, TString, TNumber, TBoolean } from '@sinclair/typebox'
 import type { Context } from '../src/utils'
 import type { Cookie } from 'elysia'
@@ -479,8 +479,8 @@ describe('Error Inference', () => {
 		})
 
 		const action = procedure.createAction('Test').build(() => ({ ok: true }))
-		expect(action.docs.response[410]).type.toBe<'Problem'>()
-		expect(action.docs.response[418]).type.toBe<'Problem'>()
+		expect(action.docs.response[410]).type.toBe<typeof Problem>()
+		expect(action.docs.response[418]).type.toBe<typeof Problem>()
 	})
 
 	test('should keep one-argument handlers compiling', () => {
@@ -489,10 +489,10 @@ describe('Error Inference', () => {
 
 	test('should document error responses in docs', () => {
 		const action = base.createAction('Test').build(() => ({ ok: true }))
-		expect(action.docs.response).type.toBe<{ 403: 'Problem'; 404: 'Problem'; 422: 'ValidationProblem'; 500: 'Problem'; 400: 'Problem' }>()
+		expect(action.docs.response).type.toBe<{ 403: typeof Problem; 404: typeof Problem; 422: typeof ValidationProblem; 500: typeof Problem; 400: typeof Problem }>()
 
 		const typed = base.createAction('Test').output(Type.Object({ ok: Type.Boolean() })).build(() => ({ ok: true }))
 		expect(typed.docs.response[200]).type.toBe<TObject<{ ok: TBoolean }>>()
-		expect(typed.docs.response[404]).type.toBe<'Problem'>()
+		expect(typed.docs.response[404]).type.toBe<typeof Problem>()
 	})
 })
