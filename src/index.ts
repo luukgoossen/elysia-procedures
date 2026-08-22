@@ -13,6 +13,7 @@ export {
 	ValidationProblem,
 	ProblemFieldError,
 	defineError,
+	createErrorFactory,
 } from './error'
 
 export type { ErrorTable, ErrorFactory } from './error'
@@ -23,7 +24,13 @@ export type { ResolveProblemOptions } from './problems'
 
 export { procedures, procedureModels, sentryReporter } from './plugin'
 
-export type { ProceduresOptions, ProblemReporter, ProblemLogger, SentryReporterOptions, SentryLike } from './plugin'
+export type {
+	ProceduresOptions,
+	ProblemReporter,
+	ProblemLogger,
+	SentryReporterOptions,
+	SentryLike,
+} from './plugin'
 
 export { configureTracing } from './trace'
 
