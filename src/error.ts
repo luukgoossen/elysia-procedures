@@ -3,13 +3,14 @@ import { Type } from '@sinclair/typebox'
 import { Value } from '@sinclair/typebox/value'
 
 // import types
-import type { Static, TObject } from '@sinclair/typebox'
+import type { Static } from '@sinclair/typebox'
+import type { ObjectSchema } from './utils'
 import type { Simplify } from 'type-fest'
 
 /**
  * A single entry in an error table.
  */
-export type ErrorEntry<M extends TObject | undefined = undefined> = {
+export type ErrorEntry<M extends ObjectSchema | undefined = undefined> = {
 	/** HTTP status code of the error */
 	status: number;
 	/** TypeBox schema for the metadata argument of onError(); omit = no metadata */
@@ -17,11 +18,11 @@ export type ErrorEntry<M extends TObject | undefined = undefined> = {
 	/** Default title; string or function of the (validated) metadata */
 	title?:
 	| string
-	| ((metadata: M extends TObject ? Static<M> : undefined) => string);
+	| ((metadata: M extends ObjectSchema ? Static<M> : undefined) => string);
 	/** Default detail; same shape as title */
 	detail?:
 	| string
-	| ((metadata: M extends TObject ? Static<M> : undefined) => string);
+	| ((metadata: M extends ObjectSchema ? Static<M> : undefined) => string);
 }
 
 /**
@@ -213,39 +214,24 @@ export class ApiError<
  * Metadata type of an error table entry.
  */
 export type ErrorMetadata<E extends ErrorEntry<any>> =
-  E['metadata'] extends TObject ? Static<E['metadata']> : undefined
+  E['metadata'] extends ObjectSchema ? Static<E['metadata']> : undefined
 
 /**
  * Arguments of the onError factory after the reason: metadata is required if the entry has a schema.
  */
-export type ErrorArgs<E extends ErrorEntry<any>> = E['metadata'] extends TObject
+export type ErrorArgs<E extends ErrorEntry<any>> = E['metadata'] extends ObjectSchema
 	? [metadata: Static<E['metadata']>, options?: ApiErrorOptions]
 	: [metadata?: undefined, options?: ApiErrorOptions]
 
-type UnionToIntersection<U> = (
-	U extends unknown ? (k: U) => void : never
-) extends (k: infer I) => void
-	? I
-	: never
-
-/**
- * One call signature per reason; intersected they behave as overloads, keeping each metadata type concrete.
- */
-export type ErrorSignatures<Errors extends ErrorTable> = UnionToIntersection<
-{
-	[R in keyof Errors & string]: (
-		reason: R,
-		...args: ErrorArgs<Errors[R]>
-	) => ApiError<R, ErrorMetadata<Errors[R]>>;
-}[keyof Errors & string]
->
-
 /**
  * Factory producing typed ApiErrors from an error table. The package defaults are always callable, overridable by key.
+ * A single generic signature resolves the metadata type per call site, so the table is never expanded eagerly.
  */
-export type ErrorFactory<Errors extends ErrorTable> = ErrorSignatures<
-MergedErrors<DefaultErrors, Errors>
-> & {
+export type ErrorFactory<Errors extends ErrorTable> = {
+	<R extends keyof MergedErrors<DefaultErrors, Errors> & string>(
+		reason: R,
+		...args: ErrorArgs<MergedErrors<DefaultErrors, Errors>[R]>
+	): ApiError<R, ErrorMetadata<MergedErrors<DefaultErrors, Errors>[R]>>;
 	/** Wraps an unexpected failure as a 5xx error; the cause is reported but never serialized */
 	unexpected(
 		cause: unknown,
@@ -378,7 +364,7 @@ export const statusesOf = (table: ErrorTable): number[] =>
  * so they can be written inline without annotating the metadata parameter.
  * @param entry - The error entry
  */
-export function defineError<const S extends number, M extends TObject>(entry: {
+export function defineError<const S extends number, M extends ObjectSchema>(entry: {
 	status: S;
 	metadata: M;
 	title?: string | ((metadata: Static<M>) => string);

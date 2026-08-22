@@ -5,10 +5,10 @@ import { trace } from './trace'
 import { createErrorFactory, statusesOf } from './error'
 
 // import types
-import type { TSchema, TObject, Static } from '@sinclair/typebox'
+import type { TSchema, Static } from '@sinclair/typebox'
 import type { Promisable, Simplify } from 'type-fest'
 import type { ProcedureFnArgs, AnyMiddleware } from './procedure'
-import type { Context, SafeTObject, MergedObject, Decorations } from './utils'
+import type { Context, ObjectSchema, SafeTObject, MergedObject, Decorations } from './utils'
 import type { DocumentDecoration } from 'elysia'
 import type { ErrorFactory, ErrorTable, DefaultErrors, NoErrors } from './error'
 
@@ -16,9 +16,9 @@ import type { ErrorFactory, ErrorTable, DefaultErrors, NoErrors } from './error'
  * Configuration arguments for creating an action builder.
  */
 export type ActionBuilderArgs<
-	Params extends TObject | undefined,
-	Query extends TObject | undefined,
-	Body extends TObject | undefined,
+	Params extends ObjectSchema | undefined,
+	Query extends ObjectSchema | undefined,
+	Body extends ObjectSchema | undefined,
 	Output extends TSchema | undefined,
 	Errors extends ErrorTable = NoErrors
 > = {
@@ -43,9 +43,9 @@ export type ActionBuilderArgs<
  */
 export type ActionArgs<
 	Ctx extends Context,
-	Params extends TObject | undefined,
-	Query extends TObject | undefined,
-	Body extends TObject | undefined,
+	Params extends ObjectSchema | undefined,
+	Query extends ObjectSchema | undefined,
+	Body extends ObjectSchema | undefined,
 	Output extends TSchema | undefined,
 	Errors extends ErrorTable = NoErrors
 > = ActionBuilderArgs<Params, Query, Body, Output, Errors> & {
@@ -58,9 +58,9 @@ export type ActionArgs<
  */
 export type ActionFn<
 	Ctx extends Context,
-	Params extends TObject | undefined,
-	Query extends TObject | undefined,
-	Body extends TObject | undefined,
+	Params extends ObjectSchema | undefined,
+	Query extends ObjectSchema | undefined,
+	Body extends ObjectSchema | undefined,
 	Output extends TSchema | undefined,
 	Out = Output extends TSchema ? Static<Output> : any,
 	Errors extends ErrorTable = NoErrors
@@ -84,9 +84,9 @@ type ErrorResponses<Status extends number> = number extends Status ? unknown : {
  */
 export class ActionBuilder<
 	Ctx extends Context,
-	Params extends TObject | undefined,
-	Query extends TObject | undefined,
-	Body extends TObject | undefined,
+	Params extends ObjectSchema | undefined,
+	Query extends ObjectSchema | undefined,
+	Body extends ObjectSchema | undefined,
 	Output extends TSchema | undefined,
 	Errors extends ErrorTable = NoErrors
 > {
@@ -103,9 +103,9 @@ export class ActionBuilder<
 	 * @private
 	 */
 	private _apply = <
-		P extends TObject | undefined,
-		Q extends TObject | undefined,
-		B extends TObject | undefined,
+		P extends ObjectSchema | undefined,
+		Q extends ObjectSchema | undefined,
+		B extends ObjectSchema | undefined,
 		O extends TSchema | undefined
 	>(
 		changes: Partial<ActionBuilderArgs<P, Q, B, O, Errors>>
@@ -120,7 +120,7 @@ export class ActionBuilder<
 	 * Adds or merges route parameter definitions to the action.
 	 * @param params - The TypeBox schema defining the route parameters
 	 */
-	public params = <T extends TObject>(params: SafeTObject<T, Params>) => {
+	public params = <T extends ObjectSchema>(params: SafeTObject<T, Params>) => {
 		const mergedParams = merge(this._state.params, params)
 		return this._apply<MergedObject<SafeTObject<T, Params>, Params>, Query, Body, Output>({
 			params: mergedParams
@@ -131,7 +131,7 @@ export class ActionBuilder<
 	 * Adds or merges query parameter definitions to the action.
 	 * @param query - The TypeBox schema defining the query parameters
 	 */
-	public query = <T extends TObject>(query: SafeTObject<T, Query>) => {
+	public query = <T extends ObjectSchema>(query: SafeTObject<T, Query>) => {
 		const mergedQuery = merge(this._state.query, query)
 		return this._apply<Params, MergedObject<SafeTObject<T, Query>, Query>, Body, Output>({
 			query: mergedQuery
@@ -142,7 +142,7 @@ export class ActionBuilder<
 	 * Adds or merges request body definitions to the action.
 	 * @param body - The TypeBox schema defining the request body
 	 */
-	public body = <T extends TObject>(body: SafeTObject<T, Body>) => {
+	public body = <T extends ObjectSchema>(body: SafeTObject<T, Body>) => {
 		const mergedBody = merge(this._state.body, body)
 		return this._apply<Params, Query, MergedObject<SafeTObject<T, Body>, Body>, Output>({
 			body: mergedBody
@@ -176,9 +176,9 @@ export class ActionBuilder<
  */
 export class Action<
 	Ctx extends Context,
-	Params extends TObject | undefined,
-	Query extends TObject | undefined,
-	Body extends TObject | undefined,
+	Params extends ObjectSchema | undefined,
+	Query extends ObjectSchema | undefined,
+	Body extends ObjectSchema | undefined,
 	Output extends TSchema | undefined,
 	Out,
 	Errors extends ErrorTable = NoErrors
@@ -245,9 +245,9 @@ export class Action<
 	 * @returns
 	 */
 	public handle = async (context: Context & {
-		params: Params extends TObject ? Static<Params> : any
-		query: Query extends TObject ? Static<Query> : any
-		body: Body extends TObject ? Static<Body> : any
+		params: Params extends ObjectSchema ? Static<Params> : any
+		query: Query extends ObjectSchema ? Static<Query> : any
+		body: Body extends ObjectSchema ? Static<Body> : any
 	}) => trace({
 		name: this.details?.tracing?.name ?? this.name,
 		op: 'procedure.action',
@@ -277,9 +277,9 @@ export class Action<
 	 * @returns
 	 */
 	public run = async (ctx: Context, input: {
-		params: Params extends TObject ? Static<Params> : any,
-		query: Query extends TObject ? Static<Query> : any,
-		body: Body extends TObject ? Static<Body> : any,
+		params: Params extends ObjectSchema ? Static<Params> : any,
+		query: Query extends ObjectSchema ? Static<Query> : any,
+		body: Body extends ObjectSchema ? Static<Body> : any,
 	}): Promise<Out> => trace({
 		name: this.details?.tracing?.name ?? this.name,
 		op: 'procedure.action',
@@ -356,9 +356,9 @@ export class Action<
 	}) as Promise<Out>
 
 	private _execute = async (ctx: Context, input: {
-		params: Params extends TObject ? Static<Params> : any,
-		query: Query extends TObject ? Static<Query> : any,
-		body: Body extends TObject ? Static<Body> : any,
+		params: Params extends ObjectSchema ? Static<Params> : any,
+		query: Query extends ObjectSchema ? Static<Query> : any,
+		body: Body extends ObjectSchema ? Static<Body> : any,
 	}): Promise<Out> => {
 
 		// run the middlewares

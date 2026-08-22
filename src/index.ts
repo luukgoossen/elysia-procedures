@@ -21,4 +21,4 @@ export { problems } from './problems'
 
 export type { ProblemsOptions } from './problems'
 
-export type { Context, Config, Decorations } from './utils'
+export type { Context, Config, Decorations, ObjectSchema } from './utils'

@@ -5,9 +5,9 @@ import { trace } from './trace'
 import { createErrorFactory, mergeErrors } from './error'
 
 // import types
-import type { Static, TObject } from '@sinclair/typebox'
+import type { Static } from '@sinclair/typebox'
 import type { Promisable, Simplify } from 'type-fest'
-import type { Context, SafeTObject, MergedObject, MergedContext, Decorations, Config } from './utils'
+import type { Context, ObjectSchema, SafeTObject, MergedObject, MergedContext, Decorations, Config } from './utils'
 import type { ErrorFactory, ErrorTable, MergedErrors, NoErrors } from './error'
 
 // define a local middleware cache
@@ -18,9 +18,9 @@ const cacheKey = (id: string, array: string[]) => `${id}:[${array.join(',')}]`
  * Configuration arguments for creating a procedure.
  */
 export type ProcedureArgs<
-	Params extends TObject | undefined,
-	Query extends TObject | undefined,
-	Body extends TObject | undefined,
+	Params extends ObjectSchema | undefined,
+	Query extends ObjectSchema | undefined,
+	Body extends ObjectSchema | undefined,
 	Errors extends ErrorTable = NoErrors
 > = {
 	/** TypeBox schema for route parameters */
@@ -42,18 +42,18 @@ export type ProcedureArgs<
  */
 export type ProcedureFnArgs<
 	Ctx extends Context,
-	Params extends TObject | undefined,
-	Query extends TObject | undefined,
-	Body extends TObject | undefined
+	Params extends ObjectSchema | undefined,
+	Query extends ObjectSchema | undefined,
+	Body extends ObjectSchema | undefined
 > = {
 	/** Context object with request data and middleware results */
 	ctx: Simplify<Ctx>
 	/** Parsed and validated route parameters */
-	params: Params extends TObject ? Static<Params> : undefined
+	params: Params extends ObjectSchema ? Static<Params> : undefined
 	/** Parsed and validated query parameters */
-	query: Query extends TObject ? Static<Query> : undefined
+	query: Query extends ObjectSchema ? Static<Query> : undefined
 	/** Parsed and validated request body */
-	body: Body extends TObject ? Static<Body> : undefined
+	body: Body extends ObjectSchema ? Static<Body> : undefined
 }
 
 /**
@@ -61,9 +61,9 @@ export type ProcedureFnArgs<
  */
 export type ProcedureFn<
 	Ctx extends Context,
-	Params extends TObject | undefined,
-	Query extends TObject | undefined,
-	Body extends TObject | undefined,
+	Params extends ObjectSchema | undefined,
+	Query extends ObjectSchema | undefined,
+	Body extends ObjectSchema | undefined,
 	Next = object | void,
 	Errors extends ErrorTable = NoErrors
 > = (input: ProcedureFnArgs<Ctx, Params, Query, Body>, onError: ErrorFactory<Errors>) => Promisable<Next>
@@ -79,9 +79,9 @@ export type AnyMiddleware = Middleware<any, any, any, any, any, any>
  */
 export class Middleware<
 	Ctx extends Context,
-	Params extends TObject | undefined,
-	Query extends TObject | undefined,
-	Body extends TObject | undefined,
+	Params extends ObjectSchema | undefined,
+	Query extends ObjectSchema | undefined,
+	Body extends ObjectSchema | undefined,
 	Next = object | void,
 	Errors extends ErrorTable = NoErrors
 > {
@@ -159,9 +159,9 @@ export class Middleware<
  */
 export class ProcedureBuilder<
 	Ctx extends Context,
-	Params extends TObject | undefined,
-	Query extends TObject | undefined,
-	Body extends TObject | undefined,
+	Params extends ObjectSchema | undefined,
+	Query extends ObjectSchema | undefined,
+	Body extends ObjectSchema | undefined,
 	Errors extends ErrorTable = NoErrors
 > {
 	private _state: ProcedureArgs<Params, Query, Body, Errors> & {
@@ -179,9 +179,9 @@ export class ProcedureBuilder<
 	 * @private
 	 */
 	private _apply = <
-		P extends TObject | undefined,
-		Q extends TObject | undefined,
-		B extends TObject | undefined
+		P extends ObjectSchema | undefined,
+		Q extends ObjectSchema | undefined,
+		B extends ObjectSchema | undefined
 	>(
 		changes: Partial<ProcedureArgs<P, Q, B, Errors> & {
 			keys?: ProcedureFn<Ctx, Params, Query, Body, string[], Errors>
@@ -197,7 +197,7 @@ export class ProcedureBuilder<
 	 * Adds or merges route parameter definitions to the procedure.
 	 * @param params - The TypeBox schema defining the route parameters
 	 */
-	public params = <T extends TObject>(params: SafeTObject<T, Params>) => {
+	public params = <T extends ObjectSchema>(params: SafeTObject<T, Params>) => {
 		const mergedParams = merge(this._state.params, params)
 		return this._apply<MergedObject<SafeTObject<T, Params>, Params>, Query, Body>({
 			params: mergedParams
@@ -208,7 +208,7 @@ export class ProcedureBuilder<
 	 * Adds or merges query parameter definitions to the procedure.
 	 * @param query - The TypeBox schema defining the query parameters
 	 */
-	public query = <T extends TObject>(query: SafeTObject<T, Query>) => {
+	public query = <T extends ObjectSchema>(query: SafeTObject<T, Query>) => {
 		const mergedQuery = merge(this._state.query, query)
 		return this._apply<Params, MergedObject<SafeTObject<T, Query>, Query>, Body>({
 			query: mergedQuery
@@ -219,7 +219,7 @@ export class ProcedureBuilder<
 	 * Adds or merges request body definitions to the procedure.
 	 * @param body - The TypeBox schema defining the request body
 	 */
-	public body = <T extends TObject>(body: SafeTObject<T, Body>) => {
+	public body = <T extends ObjectSchema>(body: SafeTObject<T, Body>) => {
 		const mergedBody = merge(this._state.body, body)
 		return this._apply<Params, Query, MergedObject<SafeTObject<T, Body>, Body>>({
 			body: mergedBody
@@ -256,9 +256,9 @@ export class ProcedureBuilder<
  */
 export class Procedure<
 	Ctx extends Context,
-	Params extends TObject | undefined,
-	Query extends TObject | undefined,
-	Body extends TObject | undefined,
+	Params extends ObjectSchema | undefined,
+	Query extends ObjectSchema | undefined,
+	Body extends ObjectSchema | undefined,
 	Errors extends ErrorTable = NoErrors
 > {
 	/** TypeBox schema for route parameters */
@@ -323,9 +323,9 @@ export class Procedure<
  */
 export const createProcedure = <
 	Ctx extends Context,
-	Params extends TObject | undefined = undefined,
-	Query extends TObject | undefined = undefined,
-	Body extends TObject | undefined = undefined,
+	Params extends ObjectSchema | undefined = undefined,
+	Query extends ObjectSchema | undefined = undefined,
+	Body extends ObjectSchema | undefined = undefined,
 	BaseErrors extends ErrorTable = NoErrors,
 	const ConfigErrors extends ErrorTable = NoErrors
 >(name: string, base?: Procedure<Ctx, Params, Query, Body, BaseErrors>, config: Config<ConfigErrors> = {}) => new ProcedureBuilder<Ctx, Params, Query, Body, MergedErrors<BaseErrors, ConfigErrors>>({

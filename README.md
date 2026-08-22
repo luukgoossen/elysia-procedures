@@ -20,6 +20,7 @@ A type-safe, composable procedure builder for [Elysia](https://elysiajs.com) wit
   - [Wire contract](#wire-contract)
   - [OpenAPI](#openapi)
 - [Telemetry](#telemetry)
+- [Type-checking performance](#type-checking-performance)
 - [Acknowledgments](#acknowledgments)
 
 ## Features
@@ -429,6 +430,27 @@ Validation failures (422) are a `ValidationProblem`: the same members plus a req
 ## Telemetry
 
 This package supports telemetry tracing. Both `@sentry/bun` and `@elysiajs/opentelemetry` are defined as optional peer dependencies. If either one is installed, telemetry traces will be made available. If both are installed, `@sentry/bun` takes priority over `@elysiajs/opentelemetry`.
+
+## Type-checking performance
+
+The builder chain is designed to keep the type checker's work per action small: schema constraints are checked structurally instead of against `TObject` (which would evaluate every schema's static type twice), schemas are only re-wrapped when there is something to merge, and `onError` is a single generic signature resolved per call instead of one overload per table entry. With ~250 actions the library itself accounts for well under half a million type instantiations.
+
+The dominant cost in a large server is Elysia's own route typing, which grows faster than linearly with the number of routes registered on **one** instance. When `tsc`, ESLint or the editor become slow, split the registrations into sub-apps and mount them on the main app. Each sub-app needs `problems()` as well so the `Problem` response models resolve; the plugin is named, so Elysia deduplicates it and every error is still handled exactly once:
+
+```typescript
+const products = new Elysia({ prefix: "/products" })
+  .use(problems())
+  .get("/:productId", getProductAction.handle, getProductAction.docs)
+  .post("/:productId/update", updateProductAction.handle, updateProductAction.docs);
+
+const orders = new Elysia({ prefix: "/orders" })
+  .use(problems())
+  .get("/", listOrdersAction.handle, listOrdersAction.docs);
+
+const app = new Elysia().use(problems()).use(products).use(orders).listen(3000);
+```
+
+In a benchmark with 500 actions registered with `.handle` and `.docs`, moving from one chain to sub-apps of 25 routes cut the checker from 6.6M to 3.6M type instantiations and peak memory from 1.1GB to 0.8GB. Splitting the sub-apps over several files additionally lets the editor re-check only the file being edited.
 
 ## Acknowledgments
 

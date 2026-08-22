@@ -286,3 +286,29 @@ describe('elysia built-in errors', () => {
 		expect(body.detail).toBe('1 field is invalid: body.file')
 	})
 })
+
+describe('sub-apps', () => {
+	test('handles each error once when mounted on nested sub-apps', async () => {
+		const calls: unknown[] = []
+		const log = (level: 'warn' | 'error', fields: Record<string, unknown>) => calls.push([level, fields])
+		const action = createProcedure('P', undefined, { errors: { table: { NOPE: { status: 418, title: 'Nope' } } } }).build()
+			.createAction('A')
+			.body(t.Object({ name: t.String() }))
+			.output(t.Object({ ok: t.Boolean() }))
+			.build(({ body }, onError) => { if (body.name === 'x') throw onError('NOPE'); return { ok: true } })
+
+		const g1 = new Elysia({ prefix: '/g1' }).use(problems({ log })).post('/a', action.handle, action.docs)
+		const g2 = new Elysia({ prefix: '/g2' }).use(problems({ log })).post('/a', action.handle, action.docs)
+		const app = new Elysia().use(problems({ log })).use(g1).use(g2)
+
+		const res = await app.handle(new Request('http://localhost/g2/a', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'x' }) }))
+		expect(res.status).toBe(418)
+		expect(res.headers.get('content-type')).toBe('application/problem+json')
+		expect(await res.json()).toMatchObject({ status: 418, reason: 'NOPE' })
+		expect(calls.length).toBe(1)
+
+		const bad = await app.handle(new Request('http://localhost/g1/a', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({}) }))
+		expect(bad.status).toBe(422)
+		expect(calls.length).toBe(2)
+	})
+})
