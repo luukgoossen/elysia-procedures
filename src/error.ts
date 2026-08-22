@@ -153,7 +153,7 @@ export type ApiErrorOptions = {
 }
 
 /**
- * A thrown API error. Serialized to an RFC 9457 problem by the problems() plugin.
+ * A thrown API error. Serialized to an RFC 9457 problem by the procedures() plugin.
  */
 export class ApiError<
 	Reason extends string = string,

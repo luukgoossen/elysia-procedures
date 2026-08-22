@@ -3,7 +3,8 @@ import { describe, test, expect, mock, beforeEach } from 'bun:test'
 import { Elysia, t } from 'elysia'
 import { openapi } from '@elysiajs/openapi'
 import { createProcedure } from '@/procedure'
-import { problems } from '@/problems'
+import { resolveProblem, problemResponse } from '@/problems'
+import { procedures, procedureModels, sentryReporter } from '@/plugin'
 import { ApiError } from '@/error'
 
 // mock the optional sentry dependency
@@ -44,8 +45,8 @@ const create = base.createAction('Create Video').body(t.Object({
 })).build(({ body }) => body)
 const boom = base.createAction('Boom').build(() => { throw new Error('db exploded') })
 
-const build = (options?: Parameters<typeof problems>[0]) => new Elysia()
-	.use(problems({ log, ...options }))
+const build = (options?: Parameters<typeof procedures>[0]) => new Elysia()
+	.use(procedures({ ...options, observability: { logging: log, ...options?.observability } }))
 	.get('/videos/:id', notFound.handle, notFound.docs)
 	.get('/upstream', upstream.handle, upstream.docs)
 	.get('/wrapped', wrapped.handle, wrapped.docs)
@@ -62,7 +63,7 @@ beforeEach(() => {
 	captureMessage.mockClear()
 })
 
-describe('problems() plugin', () => {
+describe('procedures() plugin', () => {
 	test('serializes a 4xx ApiError without reporting', async () => {
 		const res = await request(build(), '/videos/abc')
 
@@ -133,7 +134,7 @@ describe('problems() plugin', () => {
 	})
 
 	test('elides sensitive received values and truncates long ones', async () => {
-		const res = await request(build({ receivedMaxLength: 10 }), '/videos', {
+		const res = await request(build({ errors: { receivedMaxLength: 10 } }), '/videos', {
 			method: 'POST',
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({ name: 'x'.repeat(50), password: 'short', tags: [1] })
@@ -147,7 +148,7 @@ describe('problems() plugin', () => {
 	})
 
 	test('omits received for missing properties and maps locations', async () => {
-		const app = new Elysia().use(problems({ log })).get('/q', () => 'ok', { query: t.Object({ page: t.Number() }) })
+		const app = new Elysia().use(procedures({ observability: { logging: log } })).get('/q', () => 'ok', { query: t.Object({ page: t.Number() }) })
 		const res = await request(app, '/q')
 		const body: any = await res.json()
 
@@ -160,7 +161,7 @@ describe('problems() plugin', () => {
 	})
 
 	test('treats response validation failures as server errors', async () => {
-		const app = new Elysia().use(problems({ log })).get('/r', () => ({ id: 1 }) as any, { response: t.Object({ id: t.String() }) })
+		const app = new Elysia().use(procedures({ observability: { logging: log } })).get('/r', () => ({ id: 1 }) as any, { response: t.Object({ id: t.String() }) })
 		const res = await request(app, '/r')
 		const body: any = await res.json()
 
@@ -224,21 +225,21 @@ describe('problems() plugin', () => {
 	})
 
 	test('captureClientErrors reports 4xx ApiErrors as messages', async () => {
-		await request(build({ captureClientErrors: 'warn' }), '/videos/abc')
+		await request(build({ observability: { errorReporting: sentryReporter({ captureClientErrors: 'warn' }) } }), '/videos/abc')
 		expect(captureMessage).toHaveBeenCalledTimes(1)
 		expect(captureMessage.mock.calls[0] as unknown[]).toEqual(['Video not found', { level: 'warning', tags: { reason: 'NOT_FOUND', status: 404 } }])
 
-		await request(build({ captureClientErrors: 'all' }), '/videos/abc')
+		await request(build({ observability: { errorReporting: sentryReporter({ captureClientErrors: 'all' }) } }), '/videos/abc')
 		expect((captureMessage.mock.calls[1] as unknown[])[1]).toMatchObject({ level: 'info' })
 
-		await request(build({ captureClientErrors: 'off' }), '/videos/abc')
+		await request(build({ observability: { errorReporting: sentryReporter({ captureClientErrors: 'off' }) } }), '/videos/abc')
 		expect(captureMessage).toHaveBeenCalledTimes(2)
 	})
 
 	test('covers nested sub-apps when mounted once on the root', async () => {
 		const leaf = new Elysia({ prefix: '/leaf' }).get('/boom', boom.handle, boom.docs).get('/video/:id', notFound.handle, notFound.docs)
 		const branch = new Elysia({ prefix: '/branch' }).use(leaf)
-		const app = new Elysia().use(problems({ log })).use(branch)
+		const app = new Elysia().use(procedures({ observability: { logging: log } })).use(branch)
 
 		const res = await request(app, '/branch/leaf/boom')
 		expect(res.status).toBe(500)
@@ -251,8 +252,8 @@ describe('problems() plugin', () => {
 	})
 
 	test('handles each error once when mounted on several instances', async () => {
-		const child = new Elysia().use(problems({ log })).get('/child', () => { throw new Error('x') })
-		const app = new Elysia().use(problems({ log })).use(child)
+		const child = new Elysia().use(procedures({ observability: { logging: log } })).get('/child', () => { throw new Error('x') })
+		const app = new Elysia().use(procedures({ observability: { logging: log } })).use(child)
 
 		const res = await request(app, '/child')
 		expect(res.status).toBe(500)
@@ -261,11 +262,65 @@ describe('problems() plugin', () => {
 
 	test('does not cover sub-apps mounted before it', async () => {
 		const child = new Elysia().get('/child', () => { throw new Error('x') })
-		const app = new Elysia().use(child).use(problems({ log }))
+		const app = new Elysia().use(child).use(procedures({ observability: { logging: log } }))
 
 		const res = await request(app, '/child')
 		expect(res.status).toBe(500)
 		expect(res.headers.get('content-type')).not.toBe('application/problem+json')
+	})
+})
+
+describe('bring your own handler', () => {
+	test('a custom reporter replaces the sentry policy', async () => {
+		const seen: unknown[] = []
+		const report = mock((error: unknown) => { seen.push(error); return 'custom-ref' })
+		const res = await request(build({ observability: { errorReporting: report } }), '/boom')
+
+		expect(((await res.json()) as any).reference).toBe('custom-ref')
+		expect(seen[0]).toBeInstanceOf(Error)
+		expect(captureException).not.toHaveBeenCalled()
+
+		const silent = await request(build({ observability: { errorReporting: () => undefined } }), '/boom')
+		expect(((await silent.json()) as any).reference).toBeUndefined()
+	})
+
+	test('resolveProblem is pure and mirrors the plugin', () => {
+		const apiError = new ApiError({ status: 404, reason: 'NOT_FOUND', metadata: undefined, title: 'Gone', type: 'about:blank' })
+		expect(resolveProblem('API_ERROR', apiError, { instance: '/x' })).toEqual({ type: 'about:blank', title: 'Gone', status: 404, instance: '/x', reason: 'NOT_FOUND' })
+		expect(resolveProblem('NOT_FOUND', new Error('x'), { errors: { type: r => `/e/${r}` } })).toMatchObject({ type: '/e/NOT_FOUND', status: 404 })
+		expect(resolveProblem('UNKNOWN', new Error('db exploded'))).toEqual({ type: 'about:blank', title: 'Something went wrong', status: 500, reason: 'INTERNAL', detail: expect.any(String) })
+		expect(JSON.stringify(resolveProblem('UNKNOWN', new Error('db exploded')))).not.toContain('db exploded')
+		expect(resolveProblem(302, new Response(null, { status: 302 }))).toBeUndefined()
+		expect(captureException).not.toHaveBeenCalled()
+	})
+
+	test('problemResponse serializes with the problem media type', async () => {
+		const res = problemResponse({ type: 'about:blank', title: 'Nope', status: 418, reason: 'TEAPOT' })
+		expect(res.status).toBe(418)
+		expect(res.headers.get('content-type')).toBe('application/problem+json')
+		expect(await res.json()).toMatchObject({ reason: 'TEAPOT' })
+	})
+
+	test('procedureModels plus a custom onError keeps docs and the contract', async () => {
+		const app = new Elysia()
+			.use(procedureModels())
+			.onError(({ code, error, request }) => {
+				const problem = resolveProblem(code, error, { instance: new URL(request.url).pathname })
+				if (!problem) return
+				return problemResponse({ ...problem, reference: 'mine' })
+			})
+			.use(openapi())
+			.get('/videos/:id', notFound.handle, notFound.docs)
+
+		const res = await request(app, '/videos/abc')
+		expect(res.status).toBe(404)
+		expect(res.headers.get('content-type')).toBe('application/problem+json')
+		expect(await res.json()).toMatchObject({ reason: 'NOT_FOUND', metadata: { entity: 'Video' }, reference: 'mine' })
+
+		const spec: any = await (await request(app, '/openapi/json')).json()
+		expect(spec.components.schemas.Problem).toBeDefined()
+		expect(spec.paths['/videos/{id}'].get.responses['404'].content['application/json'].schema).toEqual({ $ref: '#/components/schemas/Problem' })
+		expect(captureException).not.toHaveBeenCalled()
 	})
 })
 
@@ -295,7 +350,7 @@ describe('openapi integration', () => {
 describe('elysia built-in errors', () => {
 	test('maps invalid file types to 422', async () => {
 		const app = new Elysia()
-			.use(problems({ log }))
+			.use(procedures({ observability: { logging: log } }))
 			.post('/upload', () => 'ok', { body: t.Object({ file: t.File({ type: 'image/png' }) }) })
 
 		const form = new FormData()
@@ -320,9 +375,9 @@ describe('sub-apps', () => {
 			.output(t.Object({ ok: t.Boolean() }))
 			.build(({ body }, onError) => { if (body.name === 'x') throw onError('NOPE'); return { ok: true } })
 
-		const g1 = new Elysia({ prefix: '/g1' }).use(problems({ log })).post('/a', action.handle, action.docs)
-		const g2 = new Elysia({ prefix: '/g2' }).use(problems({ log })).post('/a', action.handle, action.docs)
-		const app = new Elysia().use(problems({ log })).use(g1).use(g2)
+		const g1 = new Elysia({ prefix: '/g1' }).use(procedures({ observability: { logging: log } })).post('/a', action.handle, action.docs)
+		const g2 = new Elysia({ prefix: '/g2' }).use(procedures({ observability: { logging: log } })).post('/a', action.handle, action.docs)
+		const app = new Elysia().use(procedures({ observability: { logging: log } })).use(g1).use(g2)
 
 		const res = await app.handle(new Request('http://localhost/g2/a', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'x' }) }))
 		expect(res.status).toBe(418)

@@ -1,71 +1,29 @@
 // import dependencies
-import { Elysia, ElysiaCustomStatusResponse } from 'elysia'
-import {
-	ApiError,
-	Problem,
-	ValidationProblem,
-	createErrorFactory,
-} from './error'
+import { ElysiaCustomStatusResponse } from 'elysia'
+import { ApiError, createErrorFactory } from './error'
 
 // import types
 import type { ValidationError } from 'elysia'
-import type {
-	ProblemFieldError,
-	ProblemFieldLocation,
-	ErrorConfig,
-} from './error'
+import type { Problem, ValidationProblem, ProblemFieldError, ProblemFieldLocation, ErrorConfig, ErrorFactory, NoErrors } from './error'
 
 /**
- * Options for the problems() plugin.
+ * Options for resolving an Elysia error into a problem.
  */
-export type ProblemsOptions = {
-	/** Report 4xx ApiErrors to Sentry as messages: 'off' (default), 'warn' (level warning) or 'all' (level info) */
-	captureClientErrors?: 'off' | 'warn' | 'all';
-	/** Error configuration used for the problems the plugin builds itself, so copy and `type` URIs line up with the procedures */
-	errors?: ErrorConfig;
+export type ResolveProblemOptions = {
+	/** Request path, exposed as the problem's `instance` */
+	instance?: string
+	/** Error configuration used for the problems built here, so copy and `type` URIs line up with the procedures */
+	errors?: ErrorConfig
 	/** Maximum characters of `received` echoed per field error; default 200 */
-	receivedMaxLength?: number;
-	/** Override logging; default console.warn for 4xx and console.error for 5xx */
-	log?: (level: 'warn' | 'error', fields: Record<string, unknown>) => void;
-}
-
-type Sentry = {
-	captureException: (
-		error: unknown,
-		context?: Record<string, unknown>,
-	) => string;
-	captureMessage: (
-		message: string,
-		context?: Record<string, unknown>,
-	) => string;
+	receivedMaxLength?: number
 }
 
 /** Pointer segments whose value is never echoed back */
 const SENSITIVE = /password|secret|token|key/i
 
-/** Resolves the optional sentry dependency once */
-let sentry: Promise<Sentry | undefined> | undefined
-const loadSentry = () =>
-	(sentry ??= (async () => {
-		try {
-			// @ts-expect-error dynamic import of optional dependency
-			const module = await import('@sentry/bun')
-			return typeof module.captureException === 'function'
-				? (module as Sentry)
-				: undefined
-		} catch {
-			return undefined
-		}
-	})())
-
 /** Serializes a received value as JSON, eliding sensitive fields, values without a JSON form, and truncating long values */
-const describeReceived = (
-	pointer: string,
-	value: unknown,
-	max: number,
-): string | undefined => {
-	if (pointer.split('/').some((segment) => SENSITIVE.test(segment)))
-		return undefined
+const describeReceived = (pointer: string, value: unknown, max: number): string | undefined => {
+	if (pointer.split('/').some(segment => SENSITIVE.test(segment))) return undefined
 
 	let json: string | undefined
 	try {
@@ -87,20 +45,12 @@ const LOCATIONS = {
 	cookie: 'cookie',
 } as const satisfies Record<string, ProblemFieldLocation>
 
-const isRequestValidation = (
-	error: ValidationError,
-): error is ValidationError & { type: keyof typeof LOCATIONS } =>
-	error.type in LOCATIONS
+const isRequestValidation = (error: ValidationError): error is ValidationError & { type: keyof typeof LOCATIONS } => error.type in LOCATIONS
 
 /** Builds the field errors of a validation error */
-const fieldErrors = (
-	error: ValidationError,
-	max: number,
-): ProblemFieldError[] => {
-	const all = error.all.filter(
-		(item): item is Extract<typeof item, { path: string }> => 'path' in item,
-	)
-	return all.map((item) => {
+const fieldErrors = (error: ValidationError, max: number): ProblemFieldError[] => {
+	const all = error.all.filter((item): item is Extract<typeof item, { path: string }> => 'path' in item)
+	return all.map(item => {
 		const field: ProblemFieldError = {
 			in: LOCATIONS[error.type as keyof typeof LOCATIONS],
 			pointer: `#${item.path}`,
@@ -114,118 +64,71 @@ const fieldErrors = (
 	})
 }
 
+/** Converts a field error like { in: 'body', pointer: '#/tags/1' } to body.tags[1] */
+const humanizeField = (field: ProblemFieldError) => field.in + field.pointer
+	.slice(1)
+	.split('/')
+	.filter(Boolean)
+	.map(segment => /^\d+$/.test(segment) ? `[${segment}]` : `.${segment}`)
+	.join('')
+
 /** Builds the detail line of a validation problem, listing at most five fields */
 const describeFields = (errors: ProblemFieldError[]) => {
-	const names = errors.map(
-		(field: ProblemFieldError) =>
-			field.in +
-      field.pointer
-      	.slice(1)
-      	.split('/')
-      	.filter(Boolean)
-      	.map((segment) =>
-      		/^\d+$/.test(segment) ? `[${segment}]` : `.${segment}`,
-      	)
-      	.join(''),
-	)
+	const names = errors.map(humanizeField)
 	const listed = names.slice(0, 5).join(', ') + (names.length > 5 ? ', …' : '')
 	return `${names.length} field${names.length === 1 ? ' is' : 's are'} invalid: ${listed}`
 }
 
-/**
- * Elysia plugin serializing every failure to an RFC 9457 `application/problem+json` response.
- * Redirects, thrown Responses and `status(...)` values are returned untouched.
- */
-export const problems = (options: ProblemsOptions = {}) => {
-	const capture = options.captureClientErrors ?? 'off'
-	const receivedMaxLength = options.receivedMaxLength ?? 200
-	const log = options.log ?? ((level, fields) => console[level](fields))
-	const onError = createErrorFactory(options.errors)
-
-	return new Elysia({ name: 'elysia-procedures/problems' })
-		.model({ Problem, ValidationProblem })
-		.error({ API_ERROR: ApiError })
-		.onError({ as: 'global' }, async ({ code, error, request, set }) => {
-			// elysia uses these for redirects and early returns
-			if (
-				error instanceof Response ||
-        error instanceof ElysiaCustomStatusResponse
-			)
-				return
-
-			const instance = new URL(request.url).pathname
-			const fields: Record<string, unknown> = {
-				instance,
-				method: request.method,
-			}
-			let problem: Problem | ValidationProblem
-
-			if (error instanceof ApiError) {
-				let reference: string | undefined
-				if (error.status >= 500) {
-					reference = (await loadSentry())?.captureException(error, {
-						tags: { reason: error.reason, status: error.status },
-					})
-					fields.message =
-            error.cause instanceof Error ? error.cause.message : error.message
-				} else if (capture !== 'off') {
-					(await loadSentry())?.captureMessage(error.title, {
-						level: capture === 'warn' ? 'warning' : 'info',
-						tags: { reason: error.reason, status: error.status },
-					})
-				}
-				problem = error.toProblem({ instance, reference })
-			} else if (
-				code === 'VALIDATION' &&
-        isRequestValidation(error as ValidationError)
-			) {
-				const errors = fieldErrors(error as ValidationError, receivedMaxLength)
-				problem = {
-					...onError('INVALID_INPUT', undefined, {
-						detail: describeFields(errors),
-					}).toProblem({ instance }),
-					errors,
-				}
-			} else if (code === 'INVALID_FILE_TYPE') {
-				const { property, message } = error as Error & { property: string }
-				const errors: ProblemFieldError[] = [
-					{ in: 'body', pointer: `#/${property}`, detail: message },
-				]
-				problem = {
-					...onError('INVALID_INPUT', undefined, {
-						detail: describeFields(errors),
-					}).toProblem({ instance }),
-					errors,
-				}
-			} else if (code === 'PARSE') {
-				problem = onError('MALFORMED_REQUEST', undefined, {
-					detail: 'The request body could not be parsed.',
-				}).toProblem({ instance })
-			} else if (code === 'INVALID_COOKIE_SIGNATURE') {
-				problem = onError('MALFORMED_REQUEST', undefined, {
-					detail: 'The request carries a cookie with an invalid signature.',
-				}).toProblem({ instance })
-			} else if (code === 'NOT_FOUND') {
-				problem = onError('NOT_FOUND').toProblem({ instance })
-			} else {
-				// includes response validation failures: the handler, not the client, produced an invalid value
-				const reference = (await loadSentry())?.captureException(error)
-				if (reference !== undefined) fields.reference = reference
-				fields.message = error instanceof Error ? error.message : String(error)
-				problem = onError('INTERNAL').toProblem({ instance, reference })
-			}
-
-			log(problem.status >= 500 ? 'error' : 'warn', {
-				status: problem.status,
-				reason: problem.reason,
-				...fields,
-				...(problem.reference ? { reference: problem.reference } : {}),
-			})
-
-			set.status = problem.status
-			return new Response(JSON.stringify(problem), {
-				status: problem.status,
-				headers: { 'content-type': 'application/problem+json' },
-			})
-		})
+/** One error factory per error configuration */
+const factories = new WeakMap<ErrorConfig, ErrorFactory<NoErrors>>()
+const defaultFactory = createErrorFactory()
+const factoryFor = (errors?: ErrorConfig) => {
+	if (!errors) return defaultFactory
+	let factory = factories.get(errors)
+	if (!factory) factories.set(errors, factory = createErrorFactory(errors))
+	return factory
 }
+
+/**
+ * Resolves an error caught by Elysia's `onError` into an RFC 9457 problem. This is the wire contract as a pure function:
+ * it performs no reporting or logging, never includes raw messages of unexpected errors, and returns `undefined` for
+ * values Elysia uses for redirects and early returns (thrown Responses and `status(...)` values), which should pass through.
+ * @param code - Elysia's error code
+ * @param error - The caught error
+ * @param options - Instance, error configuration and echo limits
+ */
+export const resolveProblem = (code: string | number, error: unknown, options: ResolveProblemOptions = {}): Problem | ValidationProblem | undefined => {
+	if (error instanceof Response || error instanceof ElysiaCustomStatusResponse) return undefined
+
+	const { instance } = options
+	const onError = factoryFor(options.errors)
+	const max = options.receivedMaxLength ?? 200
+
+	if (error instanceof ApiError) return error.toProblem({ instance })
+
+	if (code === 'VALIDATION' && isRequestValidation(error as ValidationError)) {
+		const errors = fieldErrors(error as ValidationError, max)
+		return { ...onError('INVALID_INPUT', undefined, { detail: describeFields(errors) }).toProblem({ instance }), errors }
+	}
+
+	if (code === 'INVALID_FILE_TYPE') {
+		const { property, message } = error as Error & { property: string }
+		const errors: ProblemFieldError[] = [{ in: 'body', pointer: `#/${property}`, detail: message }]
+		return { ...onError('INVALID_INPUT', undefined, { detail: describeFields(errors) }).toProblem({ instance }), errors }
+	}
+
+	if (code === 'PARSE') return onError('MALFORMED_REQUEST', undefined, { detail: 'The request body could not be parsed.' }).toProblem({ instance })
+	if (code === 'INVALID_COOKIE_SIGNATURE') return onError('MALFORMED_REQUEST', undefined, { detail: 'The request carries a cookie with an invalid signature.' }).toProblem({ instance })
+	if (code === 'NOT_FOUND') return onError('NOT_FOUND').toProblem({ instance })
+
+	// anything else, including response validation failures: the server, not the client, is at fault
+	return onError('INTERNAL').toProblem({ instance })
+}
+
+/**
+ * Serializes a problem to an `application/problem+json` response.
+ */
+export const problemResponse = (problem: Problem | ValidationProblem) => new Response(JSON.stringify(problem), {
+	status: problem.status,
+	headers: { 'content-type': 'application/problem+json' },
+})

@@ -17,8 +17,12 @@ export {
 
 export type { ErrorTable, ErrorFactory } from './error'
 
-export { problems } from './problems'
+export { resolveProblem, problemResponse } from './problems'
 
-export type { ProblemsOptions } from './problems'
+export type { ResolveProblemOptions } from './problems'
+
+export { procedures, procedureModels, sentryReporter } from './plugin'
+
+export type { ProceduresOptions, ProblemReporter } from './plugin'
 
 export type { Context, Config, Decorations, ObjectSchema } from './utils'

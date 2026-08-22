@@ -16,7 +16,7 @@ A type-safe, composable procedure builder for [Elysia](https://elysiajs.com) wit
 - [Errors](#errors)
   - [Declaring errors](#declaring-errors)
   - [Throwing errors](#throwing-errors)
-  - [The `problems()` plugin](#the-problems-plugin)
+  - [The `procedures()` plugin](#the-procedures-plugin)
   - [Wire contract](#wire-contract)
   - [OpenAPI](#openapi)
 - [Telemetry](#telemetry)
@@ -274,7 +274,7 @@ const baseProcedure = createProcedure("Basic Procedure")
 
 ## Errors
 
-Errors are a first-class part of a procedure chain. You declare an **error table** once, throw errors through the typed `onError` factory injected into every handler, and let the `problems()` plugin turn everything that escapes a route into an [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) `application/problem+json` response.
+Errors are a first-class part of a procedure chain. You declare an **error table** once, throw errors through the typed `onError` factory injected into every handler, and let the `procedures()` plugin turn everything that escapes a route into an [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) `application/problem+json` response.
 
 The package has no opinion on reason names, status mapping or metadata shape; it only provides the mechanics.
 
@@ -349,45 +349,73 @@ const getVideo = baseProcedure
 
 `onError(reason, metadata?, options?)` returns an `ApiError` with public `status`, `reason`, `metadata`, `title`, `detail`, `type` and `cause`; you throw it. Copy is resolved as `options` → entry function or string → fallback (`title` is the reason in Title Case, no `detail`). Passing metadata that does not match the schema throws a plain `TypeError`, since that is a programming error rather than an API error.
 
-### The `problems()` plugin
+### The `procedures()` plugin
 
-Mount the plugin **once, on the root app, before any sub-apps**. It registers the `Problem` and `ValidationProblem` models that `action.docs` reference and a global `onError` hook that serializes every failure. Elysia applies global hooks to every route registered after them, at any nesting depth, so sub-apps need nothing; a sub-app `.use()`d *before* the plugin is not covered.
+`procedures()` is the library's Elysia integration. Mount it **once, on the root app, before any sub-apps**. It registers the `Problem` and `ValidationProblem` models that `action.docs` reference and a global `onError` hook that serializes every failure. Elysia applies global hooks to every route registered after them, at any nesting depth, so sub-apps need nothing; a sub-app `.use()`d *before* the plugin is not covered.
 
 ```typescript
 import { Elysia } from "elysia";
-import { problems } from "@luukgoossen/elysia-procedures";
+import { procedures, sentryReporter } from "@luukgoossen/elysia-procedures";
 
 const app = new Elysia()
   .use(
-    problems({
-      // report 4xx ApiErrors to Sentry as messages: "off" (default) | "warn" | "all"
-      captureClientErrors: "off",
-      // same shape as the procedure config; used for the problems the plugin builds itself
-      errors: { type: (reason) => `https://example.com/docs/errors/${reason}` },
-      // max characters of a field's `received` value echoed back; default 200
-      receivedMaxLength: 200,
-      // override logging; default console.warn for 4xx and console.error for 5xx
-      log: (level, fields) => logger[level](fields),
+    procedures({
+      // the wire contract: same shape as the procedure config, used for the problems the plugin builds itself
+      errors: {
+        type: (reason) => `https://example.com/docs/errors/${reason}`,
+        // max characters of a field's `received` value echoed back; default 200
+        receivedMaxLength: 200,
+      },
+      // policy: how handled failures are reported and logged
+      observability: {
+        // reports failures and yields the `reference`; default: sentryReporter()
+        errorReporting: sentryReporter({ captureClientErrors: "warn" }),
+        // default console.warn for 4xx and console.error for 5xx
+        logging: (level, fields) => logger[level](fields),
+      },
     }),
   )
   .get("/videos/:id", getVideo.handle, getVideo.docs)
   .listen(3000);
 ```
 
-| thrown                                         | status     | Sentry                                             | body                                           |
-| ---------------------------------------------- | ---------- | -------------------------------------------------- | ---------------------------------------------- |
-| `ApiError` < 500                               | its status | none unless `captureClientErrors` is on            | the error's problem                            |
-| `ApiError` >= 500                              | its status | `captureException` (the `cause` chain is reported) | the error's problem with a `reference`         |
-| Elysia validation error                        | 422        | none                                               | `INVALID_INPUT` with per-field `errors`        |
-| Elysia parse error or invalid cookie signature | 400        | none                                               | `MALFORMED_REQUEST`                            |
-| Elysia invalid file type                       | 422        | none                                               | `INVALID_INPUT` with one field error           |
-| unknown route                                  | 404        | none                                               | `NOT_FOUND`                                    |
-| redirects, thrown `Response`s, `status(...)`   | as is      | none                                               | untouched                                      |
-| anything else                                  | 500        | `captureException`                                 | `INTERNAL` with default copy and a `reference` |
+| thrown                                                        | status     | body                                    |
+| ------------------------------------------------------------- | ---------- | --------------------------------------- |
+| `ApiError`                                                    | its status | the error's problem                     |
+| Elysia validation error                                       | 422        | `INVALID_INPUT` with per-field `errors` |
+| Elysia parse error or invalid cookie signature                | 400        | `MALFORMED_REQUEST`                     |
+| Elysia invalid file type                                      | 422        | `INVALID_INPUT` with one field error    |
+| unknown route                                                 | 404        | `NOT_FOUND`                             |
+| redirects, thrown `Response`s, `status(...)`                  | as is      | untouched                               |
+| anything else, including a response failing the output schema | 500        | `INTERNAL` with default copy            |
 
-Sentry is loaded through a dynamic import of `@sentry/bun` and skipped when it is not installed. Every branch logs a structured line `{ status, reason, instance, method, reference?, message? }`; the raw `message` only ever appears in the log.
+Reporting is a separate policy. The default `sentryReporter()` captures every 5xx problem as an exception (Sentry follows the `cause` chain) and, with `captureClientErrors`, 4xx `ApiError`s as messages; it loads `@sentry/bun` through a dynamic import and does nothing when it is not installed. Whatever the reporter returns becomes the problem's `reference`. Every handled failure logs a structured line `{ status, reason, instance, method, reference?, message? }`; the raw `message` only ever appears in the log, and only for 5xx.
 
 Without the plugin nothing fails loudly, but you lose the contract: a thrown `ApiError` becomes a plain-text response with the right status, an unexpected `Error` is answered with its raw message (Elysia's default), validation failures use Elysia's own JSON shape, and the OpenAPI spec references `Problem` schemas that are never emitted. The `.get(path, action.handle, action.docs)` pattern above assumes the plugin is mounted.
+
+#### Bringing your own handler
+
+`procedures()` is a composition of exported pieces, so an app with its own `onError` (HTML error pages, another error tracker, a different logging stack) can keep the wire contract without the policy:
+
+- `procedureModels()` registers the `Problem` and `ValidationProblem` models that `action.docs` reference and `ApiError` as a known error. Mount it instead of `procedures()`.
+- `resolveProblem(code, error, { instance?, errors?, receivedMaxLength? })` is the behaviour table above as a pure function: no reporting, no logging, never a raw message, and `undefined` for values that should pass through.
+- `problemResponse(problem)` serializes to `application/problem+json`.
+- `sentryReporter(options)` is the default reporter, reusable on its own.
+
+```typescript
+import { Elysia } from "elysia";
+import { procedureModels, resolveProblem, problemResponse } from "@luukgoossen/elysia-procedures";
+
+const app = new Elysia()
+  .use(procedureModels())
+  .onError(async ({ code, error, request }) => {
+    const problem = resolveProblem(code, error, { instance: new URL(request.url).pathname });
+    if (!problem) return; // redirect or early return, let Elysia handle it
+
+    const reference = problem.status >= 500 ? await myTracker.capture(error) : undefined;
+    return problemResponse({ ...problem, reference });
+  });
+```
 
 ### Wire contract
 
@@ -437,19 +465,17 @@ This package supports telemetry tracing. Both `@sentry/bun` and `@elysiajs/opent
 
 The builder chain is designed to keep the type checker's work per action small: schema constraints are checked structurally instead of against `TObject` (which would evaluate every schema's static type twice), schemas are only re-wrapped when there is something to merge, and `onError` is a single generic signature resolved per call instead of one overload per table entry. With ~250 actions the library itself accounts for well under half a million type instantiations.
 
-The dominant cost in a large server is Elysia's own route typing, which grows faster than linearly with the number of routes registered on **one** instance. When `tsc`, ESLint or the editor become slow, split the registrations into sub-apps and mount them on the main app. Each sub-app needs `problems()` as well so the `Problem` response models resolve; the plugin is named, so Elysia deduplicates it and every error is still handled exactly once:
+The dominant cost in a large server is Elysia's own route typing, which grows faster than linearly with the number of routes registered on **one** instance. When `tsc`, ESLint or the editor become slow, split the registrations into sub-apps and mount them on the main app. The sub-apps need nothing extra: `procedures()` on the root covers them at runtime, and `action.docs` typechecks on any instance.
 
 ```typescript
 const products = new Elysia({ prefix: "/products" })
-  .use(problems())
   .get("/:productId", getProductAction.handle, getProductAction.docs)
   .post("/:productId/update", updateProductAction.handle, updateProductAction.docs);
 
 const orders = new Elysia({ prefix: "/orders" })
-  .use(problems())
   .get("/", listOrdersAction.handle, listOrdersAction.docs);
 
-const app = new Elysia().use(problems()).use(products).use(orders).listen(3000);
+const app = new Elysia().use(procedures()).use(products).use(orders).listen(3000);
 ```
 
 In a benchmark with 500 actions registered with `.handle` and `.docs`, moving from one chain to sub-apps of 25 routes cut the checker from 6.6M to 3.6M type instantiations and peak memory from 1.1GB to 0.8GB. Splitting the sub-apps over several files additionally lets the editor re-check only the file being edited.

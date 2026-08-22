@@ -2,7 +2,7 @@ import type { BuildConfig } from 'bun'
 import dts from 'bun-plugin-dts'
 
 const defaultBuildConfig: BuildConfig = {
-	entrypoints: ['./src/index.ts', './src/action.ts', './src/procedure.ts', './src/error.ts', './src/problems.ts'],
+	entrypoints: ['./src/index.ts', './src/action.ts', './src/procedure.ts'],
 	outdir: './dist',
 	target: 'node',
 	splitting: true,

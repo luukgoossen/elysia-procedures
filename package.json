@@ -43,16 +43,6 @@
       "require": "./dist/procedure.cjs",
       "import": "./dist/procedure.js",
       "types": "./dist/procedure.d.ts"
-    },
-    "./error": {
-      "require": "./dist/error.cjs",
-      "import": "./dist/error.js",
-      "types": "./dist/error.d.ts"
-    },
-    "./problems": {
-      "require": "./dist/problems.cjs",
-      "import": "./dist/problems.js",
-      "types": "./dist/problems.d.ts"
     }
   },
   "scripts": {

@@ -68,7 +68,7 @@ export type ActionFn<
 
 /**
  * The status-keyed response schemas documented for an action: the output under 200, `ValidationProblem` under 422 and `Problem` per other error status.
- * At runtime the error entries are the model names `'Problem'` / `'ValidationProblem'`, which Elysia resolves from the models the problems() plugin
+ * At runtime the error entries are the model names `'Problem'` / `'ValidationProblem'`, which Elysia resolves from the models the procedures() plugin
  * registers on the root app and which `@elysiajs/openapi` emits as `$ref`s. They are typed as the schemas themselves so routes typecheck on any
  * instance, not only on those whose type carries the models.
  * Error statuses are only typed when the table keeps them literal (inline literals or `defineError`); a widened `number` status documents nothing at the type level.
