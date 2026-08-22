@@ -13,6 +13,7 @@ jobs:
     name: Publish to Github Packages
     runs-on: ubuntu-latest
     permissions:
+      id-token: write
       contents: read
       packages: write
 
