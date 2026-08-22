@@ -58,7 +58,7 @@ import { createProcedure } from "@luukgoossen/elysia-procedures";
 import { Type } from "@sinclair/typebox";
 
 // Create an authentication middleware procedure
-const authProcedure = createProcedure("Ensure Auth", undefined, {
+const authProcedure = createProcedure("Ensure Auth", {
   errors: { table: { UNAUTHORIZED: { status: 401 } } },
 }).build(async ({ ctx }, onError) => {
   // Check auth header
@@ -284,13 +284,13 @@ The package has no opinion on reason names, status codes or metadata shape. It o
 
 ### Declaring errors
 
-Errors live in the `config` of `createProcedure` and in the `details` of `createAction`. Tables merge by key down the chain. The child's entry wins, and the `type` function is inherited when the child does not set one.
+Errors live in the `config` of `createProcedure`, passed as the second argument or as the third after a base procedure, and in the `details` of `createAction`. Tables merge by key down the chain. The child's entry wins, and the `type` function is inherited when the child does not set one.
 
 ```typescript
 import { createProcedure } from "@luukgoossen/elysia-procedures";
 import { Type } from "@sinclair/typebox";
 
-const baseProcedure = createProcedure("Base", undefined, {
+const baseProcedure = createProcedure("Base", {
   errors: {
     // builds the RFC 9457 `type` URI for a reason; defaults to "about:blank"
     type: (reason) => `https://example.com/docs/errors/${reason}`,

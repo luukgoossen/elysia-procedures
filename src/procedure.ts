@@ -291,7 +291,7 @@ export class Procedure<
  * Creates a new procedure builder with typed params, query, and body.
  *
  * @param name - Descriptive name for the procedure (used in logs and debugging)
- * @param base - Optional base procedure to inherit from
+ * @param base - Optional base procedure to inherit from; can be left out to pass the config directly
  * @param config - Optional tracing and error configuration, merged on top of the base procedure's
  *
  * @example
@@ -308,21 +308,30 @@ export class Procedure<
  * 	}))
  * ```
  */
-export const createProcedure = <
+export function createProcedure<
+	const ConfigErrors extends ErrorTable = NoErrors
+>(name: string, config?: Config<ConfigErrors>): ProcedureBuilder<Context, undefined, undefined, undefined, ConfigErrors>
+export function createProcedure<
 	Ctx extends Context,
 	Params extends ObjectSchema | undefined = undefined,
 	Query extends ObjectSchema | undefined = undefined,
 	Body extends ObjectSchema | undefined = undefined,
 	BaseErrors extends ErrorTable = NoErrors,
 	const ConfigErrors extends ErrorTable = NoErrors
->(name: string, base?: Procedure<Ctx, Params, Query, Body, BaseErrors>, config: Config<ConfigErrors> = {}) => new ProcedureBuilder<Ctx, Params, Query, Body, MergedErrors<BaseErrors, ConfigErrors>>({
-	params: base?.params as any,
-	query: base?.query as any,
-	body: base?.body as any,
-	middlewares: base?.middlewares ?? [],
-	name,
-	config: {
-		...config,
-		errors: mergeErrors(base?.config.errors, config.errors)
-	}
-})
+>(name: string, base?: Procedure<Ctx, Params, Query, Body, BaseErrors>, config?: Config<ConfigErrors>): ProcedureBuilder<Ctx, Params, Query, Body, MergedErrors<BaseErrors, ConfigErrors>>
+export function createProcedure(name: string, baseOrConfig?: Procedure<any, any, any, any, any> | Config<any>, config: Config<any> = {}) {
+	const base = baseOrConfig instanceof Procedure ? baseOrConfig : undefined
+	if (baseOrConfig && !base) config = baseOrConfig as Config<any>
+
+	return new ProcedureBuilder({
+		params: base?.params,
+		query: base?.query,
+		body: base?.body,
+		middlewares: base?.middlewares ?? [],
+		name,
+		config: {
+			...config,
+			errors: mergeErrors(base?.config.errors, config.errors)
+		}
+	})
+}

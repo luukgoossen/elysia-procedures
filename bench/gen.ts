@@ -7,7 +7,7 @@ lines.push(`import { Elysia } from 'elysia'`)
 lines.push(`import { Type } from '@sinclair/typebox'`)
 lines.push(`import { createProcedure, defineError, problems } from '../src/index'`)
 lines.push(`
-const base = createProcedure('Base', undefined, {
+const base = createProcedure('Base', {
   errors: {
     type: r => 'https://x/' + r,
     table: {

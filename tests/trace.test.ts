@@ -66,7 +66,7 @@ const recorder = () => {
 	return { tracer, spans }
 }
 
-const base = createProcedure('Base', undefined, {
+const base = createProcedure('Base', {
 	errors: { table: { NOT_FOUND: { status: 404 }, UPSTREAM_DOWN: { status: 502 } } }
 }).build()
 

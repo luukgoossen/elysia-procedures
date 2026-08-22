@@ -15,7 +15,7 @@ const Sentry = { captureException, captureMessage }
 const logs: { level: string; fields: Record<string, unknown> }[] = []
 const log = (level: 'warn' | 'error', fields: Record<string, unknown>) => { logs.push({ level, fields }) }
 
-const base = createProcedure('Base', undefined, {
+const base = createProcedure('Base', {
 	errors: {
 		type: r => `/errors/${r}`,
 		table: {
@@ -375,7 +375,7 @@ describe('sub-apps', () => {
 	test('handles each error once when mounted on nested sub-apps', async () => {
 		const calls: unknown[] = []
 		const log = (level: 'warn' | 'error', fields: Record<string, unknown>) => calls.push([level, fields])
-		const action = createProcedure('P', undefined, { errors: { table: { NOPE: { status: 418, title: 'Nope' } } } }).build()
+		const action = createProcedure('P', { errors: { table: { NOPE: { status: 418, title: 'Nope' } } } }).build()
 			.createAction('A')
 			.body(t.Object({ name: t.String() }))
 			.output(t.Object({ ok: t.Boolean() }))

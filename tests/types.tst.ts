@@ -415,7 +415,7 @@ describe('Action Inference', () => {
 	})
 })
 describe('Error Inference', () => {
-	const base = createProcedure('Base', undefined, {
+	const base = createProcedure('Base', {
 		errors: {
 			type: r => `/errors/${r}`,
 			table: {
@@ -465,7 +465,7 @@ describe('Error Inference', () => {
 	})
 
 	test('should type entry copy functions through defineError', () => {
-		const procedure = createProcedure('Defined', undefined, {
+		const procedure = createProcedure('Defined', {
 			errors: { table: {
 				GONE: defineError({ status: 410, metadata: Type.Object({ id: Type.String() }), title: m => m.id }),
 				TEAPOT: defineError({ status: 418, title: () => 'short and stout' }),
