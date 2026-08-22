@@ -98,7 +98,7 @@ describe('Middleware Execution', () => {
 		const result = await procedure.middlewares[0]?.execute(input)
 
 		expect(mockHandler).toHaveBeenCalledTimes(1)
-		expect(mockHandler).toHaveBeenCalledWith(input)
+		expect(mockHandler).toHaveBeenCalledWith(input, expect.any(Function))
 		expect(result).toEqual({ processed: true })
 	})
 
@@ -121,7 +121,7 @@ describe('Middleware Execution', () => {
 		const resultTwo = await procedure.middlewares[0]?.execute(input)
 
 		expect(mockHandler).toHaveBeenCalledTimes(1)
-		expect(mockHandler).toHaveBeenCalledWith(input)
+		expect(mockHandler).toHaveBeenCalledWith(input, expect.any(Function))
 		expect(resultOne).toEqual({ processed: true })
 		expect(resultTwo).toEqual({ processed: true })
 	})
@@ -272,8 +272,8 @@ describe('Chained Procedures', () => {
 		})
 
 		expect(baseHandler).toHaveBeenCalledTimes(1)
-		expect(baseHandler).toHaveBeenCalledWith(input)
+		expect(baseHandler).toHaveBeenCalledWith(input, expect.any(Function))
 		expect(derivedHandler).toHaveBeenCalledTimes(1)
-		expect(derivedHandler).toHaveBeenCalledWith(secondInput)
+		expect(derivedHandler).toHaveBeenCalledWith(secondInput, expect.any(Function))
 	})
 })

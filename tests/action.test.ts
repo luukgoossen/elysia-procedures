@@ -17,7 +17,7 @@ describe('Action Builder', () => {
 		const details = { description: 'Test action description' }
 		const action = procedure.createAction('Test Action', details).build(() => { })
 
-		expect(action.details).toEqual(details)
+		expect(action.details).toEqual({ ...details, errors: { table: {} } })
 	})
 
 	test('should create action with OpenAPI documentation', () => {

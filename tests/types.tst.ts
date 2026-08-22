@@ -2,11 +2,13 @@
 import { describe, test, expect } from 'tstyche'
 import { Type } from '@sinclair/typebox'
 import { createProcedure } from '../src/procedure'
+import { defineError } from '../src/error'
 
 // import types
 import type { Procedure } from '../src/procedure'
 import type { Action } from '../src/action'
-import type { TObject, TString, TNumber } from '@sinclair/typebox'
+import type { ApiError } from '../src/error'
+import type { TObject, TString, TNumber, TBoolean } from '@sinclair/typebox'
 import type { Context } from '../src/utils'
 import type { Cookie } from 'elysia'
 
@@ -410,5 +412,87 @@ describe('Action Inference', () => {
 			.output(Type.String())
 
 		expect(builder.build(() => { return { processed: true } })).type.toRaiseError(`Type '{ processed: boolean; }' is not assignable to type 'Promisable<string>'.`)
+	})
+})
+describe('Error Inference', () => {
+	const base = createProcedure('Base', undefined, {
+		errors: {
+			type: r => `/errors/${r}`,
+			table: {
+				NOT_FOUND: { status: 404, metadata: Type.Object({ entity: Type.String() }), title: (m: { entity: string }) => `${m.entity} not found` },
+				FORBIDDEN: { status: 403 },
+			}
+		}
+	}).build()
+
+	test('should type onError from the table', () => {
+		base.createAction('Test').build((_, onError) => {
+			expect(onError('NOT_FOUND', { entity: 'Video' })).type.toBe<ApiError<'NOT_FOUND', { entity: string }>>()
+			expect(onError('FORBIDDEN')).type.toBe<ApiError<'FORBIDDEN', undefined>>()
+			expect(onError.unexpected(new Error('x'))).type.toBe<ApiError<string, undefined>>()
+			expect(onError('INTERNAL')).type.toBe<ApiError<'INTERNAL', undefined>>()
+			expect(onError('NOT_FOUND', { entity: 'Video' })).type.toBe<ApiError<'NOT_FOUND', { entity: string }>>()
+		})
+	})
+
+	test('should reject unknown reasons and missing metadata', () => {
+		base.createAction('Test').build((_, onError) => {
+			expect(onError('NOPE')).type.toRaiseError()
+			expect(onError('NOT_FOUND')).type.toRaiseError()
+			expect(onError('NOT_FOUND', { entity: 1 })).type.toRaiseError()
+			expect(onError('FORBIDDEN', { entity: 'x' })).type.toRaiseError()
+		})
+	})
+
+	test('should merge child tables over parent tables', () => {
+		const child = createProcedure('Child', base, {
+			errors: { table: { FORBIDDEN: { status: 403, metadata: Type.Object({ role: Type.String() }) }, CONFLICT: { status: 409 } } }
+		}).build()
+
+		child.createAction('Test', { errors: { table: { GONE: { status: 410 } } } }).build((_, onError) => {
+			expect(onError('FORBIDDEN', { role: 'admin' })).type.toBe<ApiError<'FORBIDDEN', { role: string }>>()
+			expect(onError('FORBIDDEN')).type.toRaiseError()
+			expect(onError('NOT_FOUND', { entity: 'Video' })).type.toBe<ApiError<'NOT_FOUND', { entity: string }>>()
+			expect(onError('CONFLICT')).type.toBe<ApiError<'CONFLICT', undefined>>()
+			expect(onError('GONE')).type.toBe<ApiError<'GONE', undefined>>()
+		})
+	})
+
+	test('should pass onError to middleware handlers', () => {
+		createProcedure('Child', base).build((_, onError) => {
+			expect(onError('FORBIDDEN')).type.toBe<ApiError<'FORBIDDEN', undefined>>()
+		})
+	})
+
+	test('should type entry copy functions through defineError', () => {
+		const procedure = createProcedure('Defined', undefined, {
+			errors: { table: {
+				GONE: defineError({ status: 410, metadata: Type.Object({ id: Type.String() }), title: m => m.id }),
+				TEAPOT: defineError({ status: 418, title: () => 'short and stout' }),
+			} }
+		}).build()
+
+		procedure.createAction('Test').build((_, onError) => {
+			expect(onError('GONE', { id: 'x' })).type.toBe<ApiError<'GONE', { id: string }>>()
+			expect(onError('TEAPOT')).type.toBe<ApiError<'TEAPOT', undefined>>()
+			expect(onError('GONE')).type.toRaiseError()
+		})
+
+		const action = procedure.createAction('Test').build(() => ({ ok: true }))
+		expect(action.docs.response[410]).type.toBe<'Problem'>()
+		expect(action.docs.response[418]).type.toBe<'Problem'>()
+	})
+
+	test('should keep one-argument handlers compiling', () => {
+		expect(base.createAction('Test').build(() => ({ ok: true }))).type.not.toRaiseError()
+	})
+
+	test('should document error responses in docs', () => {
+		const action = base.createAction('Test').build(() => ({ ok: true }))
+		expect(action.docs.response).type.toBe<{ 403: 'Problem'; 404: 'Problem'; 422: 'ValidationProblem'; 500: 'Problem'; 400: 'Problem' }>()
+
+		const typed = base.createAction('Test').output(Type.Object({ ok: Type.Boolean() })).build(() => ({ ok: true }))
+		expect(typed.docs.response[200]).type.toBe<TObject<{ ok: TBoolean }>>()
+		expect(typed.docs.response[404]).type.toBe<'Problem'>()
 	})
 })

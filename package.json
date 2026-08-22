@@ -3,7 +3,7 @@
   "type": "module",
   "author": "Luuk Goossen",
   "license": "MIT",
-  "version": "0.3.7",
+  "version": "0.4.0",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -43,6 +43,16 @@
       "require": "./dist/procedure.cjs",
       "import": "./dist/procedure.js",
       "types": "./dist/procedure.d.ts"
+    },
+    "./error": {
+      "require": "./dist/error.cjs",
+      "import": "./dist/error.js",
+      "types": "./dist/error.d.ts"
+    },
+    "./problems": {
+      "require": "./dist/problems.cjs",
+      "import": "./dist/problems.js",
+      "types": "./dist/problems.d.ts"
     }
   },
   "scripts": {
@@ -50,6 +60,7 @@
     "test": "bun run eslint . && bun run tsc --noEmit && bun test && bun run tstyche"
   },
   "devDependencies": {
+    "@elysiajs/openapi": "^1.4.15",
     "@opentelemetry/api": "^1.9.0",
     "@stylistic/eslint-plugin": "^1",
     "@types/bun": "latest",

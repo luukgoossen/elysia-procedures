@@ -6,11 +6,14 @@ import type { DocumentDecoration } from 'elysia'
 import type { TObject } from '@sinclair/typebox'
 import type { Merge, Simplify } from 'type-fest'
 import type { Cookie } from 'elysia'
+import type { ErrorConfig, ErrorTable } from './error'
 
 /** Converts a string from Title Case to camelCase */
 export const toCamelCase = (str: string): string =>
 	str
-		.replace(/(?:^\w|[A-Z]|\b\w)/g, (match, index) => index === 0 ? match.toLowerCase() : match.toUpperCase())
+		.replace(/(?:^\w|[A-Z]|\b\w)/g, (match, index) =>
+			index === 0 ? match.toLowerCase() : match.toUpperCase(),
+		)
 		.replace(/\s+/g, '')
 
 /**
@@ -23,55 +26,71 @@ export const toCamelCase = (str: string): string =>
 export const merge = <
 	Prev extends TObject | undefined,
 	Next extends TObject | never,
->(prev: Prev, next: Next): MergedObject<Next, Prev> =>
-	Type.Object({
-		...next.properties,
-		...(prev ? prev.properties : {}),
-	}, { additionalProperties: false }) as any
+>(
+	prev: Prev,
+	next: Next,
+): MergedObject<Next, Prev> =>
+	Type.Object(
+		{
+			...next.properties,
+			...(prev ? prev.properties : {}),
+		},
+		{ additionalProperties: false },
+	) as any
 
 /**
  * Base context available in all procedures.
  */
 export type Context = {
 	/** The received HTTP request */
-	request: Request
-	cookie: Record<string, Cookie<unknown>>
+	request: Request;
+	cookie: Record<string, Cookie<unknown>>;
 }
 
 /**
  * API documentation details for an action or procedure.
  */
-export type Decorations = DocumentDecoration & Config
+export type Decorations<Errors extends ErrorTable = ErrorTable> =
+  DocumentDecoration & Config<Errors>
 
 /**
- * Tracing configuration for an action or procedure.
+ * Tracing and error configuration for an action or procedure.
  */
-export type Config = {
+export type Config<Errors extends ErrorTable = ErrorTable> = {
 	tracing?: {
-		name?: string
-		attributes?: Record<string, unknown>
-	}
+		name?: string;
+		attributes?: Record<string, unknown>;
+	};
+	errors?: ErrorConfig<Errors>;
 }
 
 /**
  * A utlity type that ensures a TObject (Next) does not have any overlapping properties with an opional reference TObject (Prev).
  */
-export type SafeTObject<Next extends TObject, Prev extends TObject | undefined = undefined> = Prev extends TObject
-	? (Extract<keyof Prev['properties'], keyof Next['properties']> extends never
+export type SafeTObject<
+	Next extends TObject,
+	Prev extends TObject | undefined = undefined,
+> = Prev extends TObject
+	? Extract<keyof Prev['properties'], keyof Next['properties']> extends never
 		? Next
-		: never)
+		: never
 	: Next
 
 /**
  * A utility type that checks the properties of a TypeBox object schema.
  */
-export type CheckProperties<T extends TObject | undefined> = T extends TObject ? T['properties'] : unknown
+export type CheckProperties<T extends TObject | undefined> = T extends TObject
+	? T['properties']
+	: unknown
 
 /**
  * A utility type that merges the properties of two TypeBox object schemas.
  * The second schema is optional and can be undefined.
  */
-export type MergedProperties<Next extends TObject, Prev extends TObject | undefined = undefined> = Merge<Next['properties'], CheckProperties<Prev>>
+export type MergedProperties<
+	Next extends TObject,
+	Prev extends TObject | undefined = undefined,
+> = Merge<Next['properties'], CheckProperties<Prev>>
 
 /**
  * A utility type that merges two TypeBox objects into one.
@@ -88,4 +107,7 @@ export type MergedObject<
  * A utility type that merges the context of a procedure with an optional next context.
  * The next context can be an object or void.
  */
-export type MergedContext<Ctx extends Context, Next extends object | void = void> = Simplify<Context & Merge<Ctx, Next extends object ? Next : unknown>>
+export type MergedContext<
+	Ctx extends Context,
+	Next extends object | void = void,
+> = Simplify<Context & Merge<Ctx, Next extends object ? Next : unknown>>

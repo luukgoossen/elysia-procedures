@@ -2,12 +2,15 @@
 import { Value } from '@sinclair/typebox/value'
 import { merge, toCamelCase } from './utils'
 import { trace } from './trace'
+import { createErrorFactory, statusesOf } from './error'
 
 // import types
 import type { TSchema, TObject, Static } from '@sinclair/typebox'
-import type { Promisable } from 'type-fest'
+import type { Promisable, Simplify } from 'type-fest'
 import type { ProcedureFnArgs, AnyMiddleware } from './procedure'
 import type { Context, SafeTObject, MergedObject, Decorations } from './utils'
+import type { DocumentDecoration } from 'elysia'
+import type { ErrorFactory, ErrorTable, DefaultErrors, NoErrors } from './error'
 
 /**
  * Configuration arguments for creating an action builder.
@@ -16,7 +19,8 @@ export type ActionBuilderArgs<
 	Params extends TObject | undefined,
 	Query extends TObject | undefined,
 	Body extends TObject | undefined,
-	Output extends TSchema | undefined
+	Output extends TSchema | undefined,
+	Errors extends ErrorTable = NoErrors
 > = {
 	/** TypeBox schema for route parameters */
 	params: Params
@@ -30,8 +34,8 @@ export type ActionBuilderArgs<
 	middlewares: AnyMiddleware[]
 	/** Name of the action for identification */
 	name: string
-	/** API documentation details for the action */
-	details?: Decorations
+	/** API documentation details for the action, carrying the effective error configuration */
+	details?: Decorations<Errors>
 }
 
 /**
@@ -42,10 +46,11 @@ export type ActionArgs<
 	Params extends TObject | undefined,
 	Query extends TObject | undefined,
 	Body extends TObject | undefined,
-	Output extends TSchema | undefined
-> = ActionBuilderArgs<Params, Query, Body, Output> & {
+	Output extends TSchema | undefined,
+	Errors extends ErrorTable = NoErrors
+> = ActionBuilderArgs<Params, Query, Body, Output, Errors> & {
 	/** The main handler function of the action */
-	handler: ActionFn<Ctx, Params, Query, Body, Output>
+	handler: ActionFn<Ctx, Params, Query, Body, Output, any, Errors>
 }
 
 /**
@@ -57,8 +62,21 @@ export type ActionFn<
 	Query extends TObject | undefined,
 	Body extends TObject | undefined,
 	Output extends TSchema | undefined,
-	Out = Output extends TSchema ? Static<Output> : any
-> = (input: ProcedureFnArgs<Ctx, Params, Query, Body>) => Promisable<Out>
+	Out = Output extends TSchema ? Static<Output> : any,
+	Errors extends ErrorTable = NoErrors
+> = (input: ProcedureFnArgs<Ctx, Params, Query, Body>, onError: ErrorFactory<Errors>) => Promisable<Out>
+
+/**
+ * The status-keyed response schemas documented for an action: the output under 200, `ValidationProblem` under 422 and `Problem` per other error status.
+ * Both models are registered by the problems() plugin, which must be mounted on the app.
+ * Error statuses are only typed when the table keeps them literal (inline literals or `defineError`); a widened `number` status documents nothing at the type level.
+ */
+export type ActionResponses<Output extends TSchema | undefined, Errors extends ErrorTable> = Simplify<
+(Output extends TSchema ? { 200: Output } : unknown)
+& ErrorResponses<(Errors[keyof Errors] | DefaultErrors[keyof DefaultErrors])['status']>
+>
+
+type ErrorResponses<Status extends number> = number extends Status ? unknown : { [S in Status]: S extends 422 ? 'ValidationProblem' : 'Problem' }
 
 /**
  * Builder class for creating actions with a type-safe API.
@@ -70,10 +88,11 @@ export class ActionBuilder<
 	Query extends TObject | undefined,
 	Body extends TObject | undefined,
 	Output extends TSchema | undefined,
+	Errors extends ErrorTable = NoErrors
 > {
-	private _state: ActionBuilderArgs<Params, Query, Body, Output>
+	private _state: ActionBuilderArgs<Params, Query, Body, Output, Errors>
 
-	constructor(base: ActionBuilderArgs<Params, Query, Body, Output>) {
+	constructor(base: ActionBuilderArgs<Params, Query, Body, Output, Errors>) {
 		this._state = base
 	}
 
@@ -89,12 +108,12 @@ export class ActionBuilder<
 		B extends TObject | undefined,
 		O extends TSchema | undefined
 	>(
-		changes: Partial<ActionBuilderArgs<P, Q, B, O>>
-	): ActionBuilder<Ctx, P, Q, B, O> => {
-		return new ActionBuilder<Ctx, P, Q, B, O>({
+		changes: Partial<ActionBuilderArgs<P, Q, B, O, Errors>>
+	): ActionBuilder<Ctx, P, Q, B, O, Errors> => {
+		return new ActionBuilder<Ctx, P, Q, B, O, Errors>({
 			...this._state,
 			...changes
-		} as ActionBuilderArgs<P, Q, B, O>)
+		} as ActionBuilderArgs<P, Q, B, O, Errors>)
 	}
 
 	/**
@@ -143,8 +162,8 @@ export class ActionBuilder<
 	 * @param handler - The function to execute when this action is called
 	 * @returns A built action with the given handler
 	 */
-	public build = <Out>(handler: ActionFn<Ctx, Params, Query, Body, Output, Output extends TSchema ? Static<Output> : Out>) => {
-		return new Action<Ctx, Params, Query, Body, Output, Output extends TSchema ? Static<Output> : Out>({
+	public build = <Out>(handler: ActionFn<Ctx, Params, Query, Body, Output, Output extends TSchema ? Static<Output> : Out, Errors>) => {
+		return new Action<Ctx, Params, Query, Body, Output, Output extends TSchema ? Static<Output> : Out, Errors>({
 			handler: handler as any,
 			...this._state
 		})
@@ -162,14 +181,16 @@ export class Action<
 	Body extends TObject | undefined,
 	Output extends TSchema | undefined,
 	Out,
+	Errors extends ErrorTable = NoErrors
 > {
-	private _handler: ActionFn<Ctx, Params, Query, Body, Output>
+	private _handler: ActionFn<Ctx, Params, Query, Body, Output, any, Errors>
 	private _middlewares: AnyMiddleware[]
+	private _onError: ErrorFactory<Errors>
 
 	/** Name of the action for identification */
 	name: string
-	/** API documentation details for the action */
-	details?: Decorations
+	/** API documentation details for the action, carrying the effective error configuration */
+	details?: Decorations<Errors>
 	/** TypeBox schema for route parameters */
 	params: Params
 	/** TypeBox schema for query parameters */
@@ -179,9 +200,10 @@ export class Action<
 	/** TypeBox schema for response output */
 	output: Output
 
-	constructor(input: ActionArgs<Ctx, Params, Query, Body, Output>) {
+	constructor(input: ActionArgs<Ctx, Params, Query, Body, Output, Errors>) {
 		this._handler = input.handler
 		this._middlewares = input.middlewares
+		this._onError = createErrorFactory(input.details?.errors)
 
 		this.name = input.name
 		this.details = input.details
@@ -195,15 +217,21 @@ export class Action<
 	 * The API documentation for the action in Elysia route handler format.
 	 */
 	public get docs() {
+		const details = Object.fromEntries(Object.entries(this.details ?? {}).filter(([key]) => key !== 'errors' && key !== 'tracing')) as DocumentDecoration
+		const statuses = statusesOf(this.details?.errors?.table ?? {})
+
 		return {
 			params: this.params as any,
 			query: this.query,
 			body: this.body,
-			response: this.output,
+			response: {
+				...(this.output ? { 200: this.output } : {}),
+				...Object.fromEntries(statuses.map(status => [status, status === 422 ? 'ValidationProblem' : 'Problem'])),
+			} as ActionResponses<Output, Errors>,
 			detail: {
 				summary: this.name,
 				operationId: toCamelCase(this.name),
-				...this.details
+				...details,
 			},
 		}
 	}
@@ -355,7 +383,7 @@ export class Action<
 				query: input.query,
 				body: input.body,
 				ctx: ctx as Ctx
-			})
+			}, this._onError)
 
 			span?.end(performance.timeOrigin + performance.now())
 			return result

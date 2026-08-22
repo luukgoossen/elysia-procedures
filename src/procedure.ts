@@ -2,11 +2,13 @@
 import { ActionBuilder } from './action'
 import { merge } from './utils'
 import { trace } from './trace'
+import { createErrorFactory, mergeErrors } from './error'
 
 // import types
 import type { Static, TObject } from '@sinclair/typebox'
 import type { Promisable, Simplify } from 'type-fest'
 import type { Context, SafeTObject, MergedObject, MergedContext, Decorations, Config } from './utils'
+import type { ErrorFactory, ErrorTable, MergedErrors, NoErrors } from './error'
 
 // define a local middleware cache
 const cache = new WeakMap<Request, Map<string, any>>()
@@ -18,7 +20,8 @@ const cacheKey = (id: string, array: string[]) => `${id}:[${array.join(',')}]`
 export type ProcedureArgs<
 	Params extends TObject | undefined,
 	Query extends TObject | undefined,
-	Body extends TObject | undefined
+	Body extends TObject | undefined,
+	Errors extends ErrorTable = NoErrors
 > = {
 	/** TypeBox schema for route parameters */
 	params: Params
@@ -30,8 +33,8 @@ export type ProcedureArgs<
 	middlewares: AnyMiddleware[]
 	/** Name of the procedure for identification */
 	name: string
-	/** Additional configuration for the procedure */
-	config: Config
+	/** Effective configuration for the procedure, including the merged error table */
+	config: Config<Errors>
 }
 
 /**
@@ -61,13 +64,14 @@ export type ProcedureFn<
 	Params extends TObject | undefined,
 	Query extends TObject | undefined,
 	Body extends TObject | undefined,
-	Next = object | void
-> = (input: ProcedureFnArgs<Ctx, Params, Query, Body>) => Promisable<Next>
+	Next = object | void,
+	Errors extends ErrorTable = NoErrors
+> = (input: ProcedureFnArgs<Ctx, Params, Query, Body>, onError: ErrorFactory<Errors>) => Promisable<Next>
 
 /**
  * Type alias for any middleware type.
  */
-export type AnyMiddleware = Middleware<any, any, any, any>
+export type AnyMiddleware = Middleware<any, any, any, any, any, any>
 
 /**
  * Middleware class representing a function to run during request processing.
@@ -78,23 +82,26 @@ export class Middleware<
 	Params extends TObject | undefined,
 	Query extends TObject | undefined,
 	Body extends TObject | undefined,
-	Next = object | void
+	Next = object | void,
+	Errors extends ErrorTable = NoErrors
 > {
 	private _id: string = crypto.randomUUID()
-	private _handler: ProcedureFn<Ctx, Params, Query, Body, Next>
-	private _keys?: ProcedureFn<Ctx, Params, Query, Body, string[]>
+	private _handler: ProcedureFn<Ctx, Params, Query, Body, Next, Errors>
+	private _keys?: ProcedureFn<Ctx, Params, Query, Body, string[], Errors>
+	private _onError: ErrorFactory<Errors>
 
 	/** Name of the middleware for identification */
 	name: string
 
 	/** Additional configuration for the middleware */
-	config: Config
+	config: Config<Errors>
 
-	constructor(handler: ProcedureFn<Ctx, Params, Query, Body, Next>, name: string, config: Config, keys?: ProcedureFn<Ctx, Params, Query, Body, string[]>) {
+	constructor(handler: ProcedureFn<Ctx, Params, Query, Body, Next, Errors>, name: string, config: Config<Errors>, keys?: ProcedureFn<Ctx, Params, Query, Body, string[], Errors>) {
 		this._handler = handler
 		this._keys = keys
 		this.name = name
 		this.config = config
+		this._onError = createErrorFactory(config.errors)
 	}
 
 	/**
@@ -113,7 +120,7 @@ export class Middleware<
 		}
 	}, async span => {
 		if (!this._keys) {
-			const result = await this._handler(input)
+			const result = await this._handler(input, this._onError)
 
 			span?.setAttribute('procedure.cache', 'unavailable')
 			span?.end(performance.timeOrigin + performance.now())
@@ -121,7 +128,7 @@ export class Middleware<
 		}
 
 		// compute a cache key based on the name and input params, query, and body
-		const key = cacheKey(this._id, await this._keys(input))
+		const key = cacheKey(this._id, await this._keys(input, this._onError))
 
 		// check if the middleware has already been executed
 		const cached = cache.get(input.ctx.request) ?? new Map()
@@ -134,7 +141,7 @@ export class Middleware<
 		}
 
 		// execute the middleware handler
-		const result = await this._handler(input)
+		const result = await this._handler(input, this._onError)
 
 		// store the result in the cache, use null for void results
 		cached.set(key, result ?? null)
@@ -154,13 +161,14 @@ export class ProcedureBuilder<
 	Ctx extends Context,
 	Params extends TObject | undefined,
 	Query extends TObject | undefined,
-	Body extends TObject | undefined
+	Body extends TObject | undefined,
+	Errors extends ErrorTable = NoErrors
 > {
-	private _state: ProcedureArgs<Params, Query, Body> & {
-		keys?: ProcedureFn<Ctx, Params, Query, Body, string[]>
+	private _state: ProcedureArgs<Params, Query, Body, Errors> & {
+		keys?: ProcedureFn<Ctx, Params, Query, Body, string[], Errors>
 	}
 
-	constructor(base: ProcedureArgs<Params, Query, Body>) {
+	constructor(base: ProcedureArgs<Params, Query, Body, Errors>) {
 		this._state = base
 	}
 
@@ -175,14 +183,14 @@ export class ProcedureBuilder<
 		Q extends TObject | undefined,
 		B extends TObject | undefined
 	>(
-		changes: Partial<ProcedureArgs<P, Q, B> & {
-			keys?: ProcedureFn<Ctx, Params, Query, Body, string[]>
+		changes: Partial<ProcedureArgs<P, Q, B, Errors> & {
+			keys?: ProcedureFn<Ctx, Params, Query, Body, string[], Errors>
 		}>
-	): ProcedureBuilder<Ctx, P, Q, B> => {
-		return new ProcedureBuilder<Ctx, P, Q, B>({
+	): ProcedureBuilder<Ctx, P, Q, B, Errors> => {
+		return new ProcedureBuilder<Ctx, P, Q, B, Errors>({
 			...this._state,
 			...changes
-		} as ProcedureArgs<P, Q, B>)
+		} as ProcedureArgs<P, Q, B, Errors>)
 	}
 
 	/**
@@ -222,20 +230,20 @@ export class ProcedureBuilder<
 	 * Adds cache keys to the procedure.
 	 * @param keys - The function to compute the cache keys
 	 */
-	public cache = (keys: ProcedureFn<Ctx, Params, Query, Body, string[]>) => this._apply<Params, Query, Body>({ keys })
+	public cache = (keys: ProcedureFn<Ctx, Params, Query, Body, string[], Errors>) => this._apply<Params, Query, Body>({ keys })
 
 	/**
 		 * Builds this procedure with the given handler function.
 		 * @param handler - The function to execute when this procedure is called
 		 * @returns A built procedure with the given handler
 		 */
-	public build = <Next extends object | void>(handler?: ProcedureFn<Ctx, Params, Query, Body, Next>): Procedure<MergedContext<Ctx, Next>, Params, Query, Body> => {
+	public build = <Next extends object | void>(handler?: ProcedureFn<Ctx, Params, Query, Body, Next, Errors>): Procedure<MergedContext<Ctx, Next>, Params, Query, Body, Errors> => {
 		if (handler) {
-			const middleware = new Middleware<Ctx, Params, Query, Body, Next>(handler, this._state.name, this._state.config, this._state.keys)
+			const middleware = new Middleware<Ctx, Params, Query, Body, Next, Errors>(handler, this._state.name, this._state.config, this._state.keys)
 			this._state.middlewares = [...this._state.middlewares, middleware]
 		}
 
-		return new Procedure<MergedContext<Ctx, Next>, Params, Query, Body>(this._state)
+		return new Procedure<MergedContext<Ctx, Next>, Params, Query, Body, Errors>(this._state)
 	}
 }
 
@@ -250,7 +258,8 @@ export class Procedure<
 	Ctx extends Context,
 	Params extends TObject | undefined,
 	Query extends TObject | undefined,
-	Body extends TObject | undefined
+	Body extends TObject | undefined,
+	Errors extends ErrorTable = NoErrors
 > {
 	/** TypeBox schema for route parameters */
 	params: Params
@@ -260,29 +269,33 @@ export class Procedure<
 	body: Body
 	/** Chain of middleware to execute before the main action handler */
 	middlewares: AnyMiddleware[]
+	/** Effective configuration of the procedure, including the merged error table */
+	config: Config<Errors>
 
-	constructor(base: ProcedureArgs<Params, Query, Body>) {
+	constructor(base: ProcedureArgs<Params, Query, Body, Errors>) {
 		this.params = base.params
 		this.query = base.query
 		this.body = base.body
 		this.middlewares = base.middlewares
+		this.config = base.config
 	}
 
 	/**
 	 * Creates a new action from this procedure.
 	 * @param name - Name of the action for identification
-	 * @param details - API documentation details for the action
+	 * @param details - API documentation details for the action, including additional errors
 	 * @returns A new ActionBuilder instance
 	 */
-	public createAction = (name: string, details?: Decorations) => {
-		return new ActionBuilder<Ctx, Params, Query, Body, undefined>({
+	public createAction = <const DetailErrors extends ErrorTable = NoErrors>(name: string, details?: Decorations<DetailErrors>) => {
+		const errors = mergeErrors(this.config.errors, details?.errors)
+		return new ActionBuilder<Ctx, Params, Query, Body, undefined, MergedErrors<Errors, DetailErrors>>({
 			params: this.params,
 			query: this.query,
 			body: this.body,
 			output: undefined,
 			middlewares: this.middlewares,
 			name,
-			details,
+			details: { ...details, errors } as Decorations<MergedErrors<Errors, DetailErrors>>,
 		})
 	}
 }
@@ -292,7 +305,7 @@ export class Procedure<
  *
  * @param name - Descriptive name for the procedure (used in logs and debugging)
  * @param base - Optional base procedure to inherit from
- * @param role - Optional role for authorization purposes
+ * @param config - Optional tracing and error configuration, merged onto the base procedure's
  *
  * @example
  * ```ts
@@ -312,12 +325,17 @@ export const createProcedure = <
 	Ctx extends Context,
 	Params extends TObject | undefined = undefined,
 	Query extends TObject | undefined = undefined,
-	Body extends TObject | undefined = undefined
->(name: string, base?: Procedure<Ctx, Params, Query, Body>, config: Config = {}) => new ProcedureBuilder<Ctx, Params, Query, Body>({
+	Body extends TObject | undefined = undefined,
+	BaseErrors extends ErrorTable = NoErrors,
+	const ConfigErrors extends ErrorTable = NoErrors
+>(name: string, base?: Procedure<Ctx, Params, Query, Body, BaseErrors>, config: Config<ConfigErrors> = {}) => new ProcedureBuilder<Ctx, Params, Query, Body, MergedErrors<BaseErrors, ConfigErrors>>({
 	params: base?.params as any,
 	query: base?.query as any,
 	body: base?.body as any,
 	middlewares: base?.middlewares ?? [],
 	name,
-	config
+	config: {
+		...config,
+		errors: mergeErrors(base?.config.errors, config.errors)
+	}
 })
