@@ -3,8 +3,10 @@ import { Elysia } from 'elysia'
 import { ApiError, Problem, ValidationProblem } from './error'
 import { resolveProblem, problemResponse } from './problems'
 import { configureTracing } from './trace'
+import { registerSchemas, schemaModels } from './models'
 
 // import types
+import type { TSchema } from '@sinclair/typebox'
 import type { Promisable } from 'type-fest'
 import type { ErrorConfig } from './error'
 import type { ResolveProblemOptions } from './problems'
@@ -23,7 +25,7 @@ export type ProblemLogger = (level: 'warn' | 'error', fields: Record<string, unk
 /**
  * Options for the procedures() plugin, grouped by concern.
  */
-export type ProceduresOptions = {
+export type ProceduresOptions = ProcedureModelsOptions & {
 	/**
 	 * Error configuration for the problems the plugin builds itself (validation, parse and unknown route failures).
 	 * Pass the same `type` function and overrides as the procedures so copy and `type` URIs line up. Also holds the
@@ -83,12 +85,28 @@ const messageOf = (error: unknown) => {
 }
 
 /**
- * Registers the `Problem` and `ValidationProblem` models that `action.docs` reference, and `ApiError` as a known
- * error. Mount this instead of procedures() when you bring your own `onError` handler.
+ * Options for the models the plugin registers.
  */
-export const procedureModels = () => new Elysia({ name: 'elysia-procedures/models' })
-	.model({ Problem, ValidationProblem })
-	.error({ API_ERROR: ApiError })
+export type ProcedureModelsOptions = {
+	/**
+	 * Schemas to register as OpenAPI models on top of the ones the actions register themselves. Only needed for
+	 * actions built after this plugin is mounted, for instance behind a dynamic import.
+	 */
+	schemas?: TSchema[]
+}
+
+/**
+ * Registers the `Problem` and `ValidationProblem` models that `action.docs` reference, every `$id` bearing schema the
+ * actions registered, and `ApiError` as a known error. Mount this instead of procedures() when you bring your own
+ * `onError` handler.
+ */
+export const procedureModels = (options: ProcedureModelsOptions = {}) => {
+	if (options.schemas?.length) registerSchemas(options.schemas)
+
+	return new Elysia({ name: 'elysia-procedures/models' })
+		.model({ Problem, ValidationProblem, ...schemaModels() })
+		.error({ API_ERROR: ApiError })
+}
 
 /**
  * The Elysia plugin. Registers the problem models, serializes every failure to an RFC 9457
@@ -103,7 +121,7 @@ export const procedures = (options: ProceduresOptions = {}) => {
 	configureTracing(options.observability?.tracing ?? false)
 
 	return new Elysia({ name: 'elysia-procedures' })
-		.use(procedureModels())
+		.use(procedureModels({ schemas: options.schemas }))
 		.onError({ as: 'global' }, async ({ code, error, request, set }) => {
 			const instance = new URL(request.url).pathname
 			const resolved = resolveProblem(code, error, { errors, receivedMaxLength, instance })

@@ -22,10 +22,18 @@ export { resolveProblem, problemResponse } from './problems'
 
 export type { ResolveProblemOptions } from './problems'
 
+export {
+	registerSchema,
+	registerSchemas,
+	schemaModels,
+	clearSchemas,
+} from './models'
+
 export { procedures, procedureModels, sentryReporter } from './plugin'
 
 export type {
 	ProceduresOptions,
+	ProcedureModelsOptions,
 	ProblemReporter,
 	ProblemLogger,
 	SentryReporterOptions,

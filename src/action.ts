@@ -3,6 +3,7 @@ import { Value } from '@sinclair/typebox/value'
 import { merge, toCamelCase } from './utils'
 import { trace } from './trace'
 import { createErrorFactory, statusesOf } from './error'
+import { registerSchema } from './models'
 
 // import types
 import type { TSchema, Static } from '@sinclair/typebox'
@@ -70,9 +71,10 @@ export type ActionFn<
  * The response schemas an action documents, keyed by status: the output under 200, `ValidationProblem` under 422
  * and `Problem` under every other status in the error table.
  *
- * At runtime the error entries are the model names `'Problem'` and `'ValidationProblem'`. Elysia resolves those from
- * the models the procedures() plugin registers on the root app, and `@elysiajs/openapi` emits them as `$ref`s. The
- * type uses the schemas themselves, so routes typecheck on any instance, not only on one whose type carries the models.
+ * At runtime the error entries are the model names `'Problem'` and `'ValidationProblem'`, and so is the 200 entry when
+ * the output schema carries an `$id`. Elysia resolves those from the models the procedures() plugin registers on the
+ * root app, and `@elysiajs/openapi` emits them as `$ref`s. The type uses the schemas themselves, so routes typecheck
+ * on any instance, not only on one whose type carries the models.
  *
  * Error statuses only show up in the type when the table keeps them literal (inline literals or `defineError`).
  * A status widened to `number` documents nothing.
@@ -157,11 +159,19 @@ export class ActionBuilder<
 
 	/**
 	 * Adds response output definitions to the action.
+	 *
+	 * A schema carrying an `$id`, at its root or anywhere below it, is registered as an OpenAPI model here, while the
+	 * action is being built. That is early enough for the models to reach the plugin as long as the module defining
+	 * the action is loaded before `procedures()` is mounted, which is what an import at the top of the file does.
 	 * @param output - The TypeBox schema defining the reponse output
 	 */
-	public output = <T extends TSchema>(output: T) => this._apply<Params, Query, Body, T>({
-		output
-	})
+	public output = <T extends TSchema>(output: T) => {
+		registerSchema(output)
+
+		return this._apply<Params, Query, Body, T>({
+			output
+		})
+	}
 
 	/**
 	 * Builds this action with the given handler function.
@@ -231,7 +241,7 @@ export class Action<
 			query: this.query,
 			body: this.body,
 			response: {
-				...(this.output ? { 200: this.output } : {}),
+				...(this.output ? { 200: registerSchema(this.output) } : {}),
 				...Object.fromEntries(statuses.map(status => [status, status === 422 ? 'ValidationProblem' : 'Problem'])),
 			} as ActionResponses<Output, Errors>,
 			detail: {

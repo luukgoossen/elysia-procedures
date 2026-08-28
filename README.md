@@ -19,6 +19,7 @@ A procedure builder for [Elysia](https://elysiajs.com) with [TypeBox](https://gi
   - [The `procedures()` plugin](#the-procedures-plugin)
   - [Wire contract](#wire-contract)
   - [OpenAPI](#openapi)
+- [Named schemas](#named-schemas)
 - [Tracing](#tracing)
 - [Type-checking performance](#type-checking-performance)
 - [Acknowledgments](#acknowledgments)
@@ -30,6 +31,7 @@ A procedure builder for [Elysia](https://elysiajs.com) with [TypeBox](https://gi
 - **Validation.** TypeBox schemas validate params, query, body and output.
 - **Composable.** Procedures extend other procedures, and actions reuse them as middleware.
 - **Documentation.** OpenAPI details live next to the handler and `action.docs` emits them.
+- **Named schemas.** An `$id` on an output schema makes it a reusable OpenAPI model instead of a copy per route.
 - **Caching.** A procedure runs once per request, keyed by the dependencies you name.
 - **Errors.** Typed error tables, RFC 9457 `application/problem+json` responses and pluggable error reporting.
 - **Tracing.** OpenTelemetry spans for every action, middleware and handler run.
@@ -484,7 +486,54 @@ A response that fails the action's output schema is a server bug, not a client e
 
 ### OpenAPI
 
-`action.docs.response` is keyed by status. `200` holds the output schema when one is defined, `422` references the `ValidationProblem` model, and every other status in the effective table, plus 500, references the shared `Problem` model. With `@elysiajs/openapi` this yields `components.schemas.Problem`, `components.schemas.ValidationProblem` and a `$ref` per documented status. `ApiError`, `Problem` and `ValidationProblem` are exported in case you need to map problems onto another transport.
+`action.docs.response` is keyed by status. `200` holds the output schema when one is defined, `422` references the `ValidationProblem` model, and every other status in the effective table, plus 500, references the shared `Problem` model. With `@elysiajs/openapi` this yields `components.schemas.Problem`, `components.schemas.ValidationProblem` and a `$ref` per documented status. `ApiError`, `Problem` and `ValidationProblem` are exported in case you need to map problems onto another transport. Output schemas become models too when you name them; see [Named schemas](#named-schemas).
+
+## Named schemas
+
+Without a name, an output schema is copied into the spec at every route that returns it: a schema used by ten routes is written out ten times, and a client generator gives each copy its own anonymous type. Give the schema an `$id` and it becomes one entry in `components.schemas`, referenced by `$ref` wherever it appears.
+
+```typescript
+import { Type } from "@sinclair/typebox";
+
+const deviceType = Type.Object(
+  {
+    id: Type.String(),
+    name: Type.String(),
+  },
+  { $id: "DeviceType" },
+);
+
+const device = Type.Object(
+  {
+    id: Type.String(),
+    type: deviceType,
+  },
+  { $id: "Device" },
+);
+
+const getDevice = baseProcedure
+  .createAction("Get Device")
+  .params(Type.Object({ id: Type.String() }))
+  .output(device)
+  .build(({ params }) => findDevice(params.id));
+
+const listDevices = baseProcedure
+  .createAction("List Devices")
+  .output(Type.Object({ devices: Type.Array(device) }))
+  .build(() => ({ devices: findDevices() }));
+```
+
+The spec now holds `Device` and `DeviceType` once each. `getDevice` answers with `{ "$ref": "#/components/schemas/Device" }` and `listDevices` with an array of that reference, and `Device` points at `DeviceType` rather than repeating it. Your generated client gets a `Device` type you can import and pass around, instead of reaching into one response type per operation.
+
+Naming is per schema and opt-in. A schema with no `$id` anywhere in it is documented exactly as it was before. A schema that has no `$id` of its own but holds ones that do is documented inline with those references in place, which is what `listDevices` does above.
+
+Only outputs take part. Params, query and body stay inline: `@elysiajs/openapi` reads the properties of params and query to build the parameter list, and Elysia's coercion of string parameters into numbers and booleans does not reach through a reference. Members of a union stay inline as well, because a reference inside one costs Elysia the response normalizer for the whole route.
+
+Registration happens in `.output()`, while the action is built. The models are complete by the time `procedures()` is mounted, as long as the modules defining the actions are imported first, which importing them at the top of the file that builds the app already does. For actions built later, behind a dynamic import, hand their schemas to the plugin: `procedures({ schemas: [device] })`. `registerSchema`, `registerSchemas` and `schemaModels` are exported for the same case.
+
+Validation is unchanged. `action.run()` validates against the output schema itself, fully inlined, and Elysia resolves the references when it compiles a route's response validator. What it does not resolve is the normalizer that strips unknown properties, so properties nested inside a referenced schema are left in place rather than removed.
+
+The registry is global and keyed by the `$id`. Registering two different schemas under one name throws while the module is loading, so reuse the one schema everywhere rather than cloning it: `CloneType(device, { description: "..." })` is a second schema carrying the same `$id`. Reusing the same object, including through `Type.Optional()`, is the ordinary case and does nothing. `Problem` and `ValidationProblem` are taken. Two apps booted in one process share the registry too, so each spec lists the other's models; `clearSchemas()` empties it between them, and between tests that register schemas of their own.
 
 ## Tracing
 

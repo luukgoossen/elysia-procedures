@@ -495,4 +495,13 @@ describe('Error Inference', () => {
 		expect(typed.docs.response[200]).type.toBe<TObject<{ ok: TBoolean }>>()
 		expect(typed.docs.response[404]).type.toBe<typeof Problem>()
 	})
+
+	test('should keep the types of a registered output schema', () => {
+		const output = Type.Object({ ok: Type.Boolean() }, { $id: 'Registered' })
+		const action = base.createAction('Test').output(output).build(() => ({ ok: true }))
+
+		expect(action.docs.response[200]).type.toBe<typeof output>()
+		expect(action.run).type.toBe<(ctx: Context, input: { params: any, query: any, body: any }) => Promise<{ ok: boolean }>>()
+		expect(base.createAction('Test').output(output).build(() => ({ ok: 'yes' }))).type.toRaiseError()
+	})
 })
