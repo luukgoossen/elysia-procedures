@@ -207,6 +207,31 @@ describe('openapi integration', () => {
 		expect(await bad.json()).toMatchObject({ reason: 'INTERNAL' })
 	})
 
+	test('a schema can nest the problem model, which resolves like any other model', async () => {
+		const failure = { type: 'about:blank', title: 'Download failed', status: 502, reason: 'DOWNLOAD_FAILED', detail: 'The server answered 404' }
+		const job = Type.Object({
+			id: Type.String(),
+			// as is, inside a union member, and in the copy Type.Optional makes
+			status: Type.Union([
+				Type.Object({ type: Type.Literal('FAILED'), problem: Problem }),
+				Type.Object({ type: Type.Literal('DONE') }),
+			]),
+			last: Type.Optional(Problem),
+		}, { $id: 'Job' })
+		const action = base.createAction('Get Job').output(job)
+			.build(() => ({ id: 'j', status: { type: 'FAILED' as const, problem: failure }, last: failure }))
+		const app = new Elysia().use(procedures({ observability: { logging: () => {} } })).use(openapi()).get('/jobs', action.handle, action.docs)
+
+		const response = await request(app, '/jobs')
+		expect(response.status).toBe(200)
+		expect(await response.json()).toMatchObject({ id: 'j', status: { problem: { status: 502, reason: 'DOWNLOAD_FAILED' } }, last: { status: 502 } })
+
+		const spec: any = await (await request(app, '/openapi/json')).json()
+		expect(spec.components.schemas.Job.properties.status.anyOf[0].properties.problem).toEqual(ref('Problem'))
+		expect(spec.components.schemas.Job.properties.last).toEqual(ref('Problem'))
+		expect(Object.keys(spec.components.schemas).sort()).toEqual(['Job', 'Problem', 'ValidationProblem'])
+	})
+
 	test('procedureModels registers the same models', async () => {
 		const action = base.createAction('Get Device').output(device).build(() => ({ id: 'd', type: { id: 't', name: 'n' }, history: [] }))
 		const app = new Elysia().use(procedureModels()).use(openapi()).get('/devices', action.handle, action.docs)
