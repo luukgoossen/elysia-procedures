@@ -1,14 +1,14 @@
 // import dependencies
 import { Elysia } from 'elysia'
-import { ApiError, Problem, ValidationProblem } from './error'
+import { ApiError } from './error'
 import { resolveProblem, problemResponse } from './problems'
 import { configureTracing } from './trace'
-import { registerSchemas, schemaModels } from './models'
+import { problemModels, registerSchemas, schemaModels } from './models'
 
 // import types
 import type { TSchema } from '@sinclair/typebox'
 import type { Promisable } from 'type-fest'
-import type { ErrorConfig } from './error'
+import type { ErrorConfig, Problem, ValidationProblem } from './error'
 import type { ResolveProblemOptions } from './problems'
 import type { TracingOptions } from './trace'
 
@@ -104,7 +104,7 @@ export const procedureModels = (options: ProcedureModelsOptions = {}) => {
 	if (options.schemas?.length) registerSchemas(options.schemas)
 
 	return new Elysia({ name: 'elysia-procedures/models' })
-		.model({ Problem, ValidationProblem, ...schemaModels() })
+		.model({ ...problemModels(), ...schemaModels() })
 		.error({ API_ERROR: ApiError })
 }
 

@@ -26,6 +26,7 @@ export {
 	registerSchema,
 	registerSchemas,
 	schemaModels,
+	problemModels,
 	clearSchemas,
 } from './models'
 

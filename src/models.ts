@@ -111,19 +111,22 @@ const reference = (schema: TSchema): TSchema => {
 	return withModifiers(Type.Ref(PREFIX + name), schema)
 }
 
+/** Whether two schemas are the same schema, or a copy of it such as the one `Type.Optional` makes */
+const isSame = (a: TSchema, b: TSchema) => a === b || JSON.stringify(a) === JSON.stringify(b)
+
 /** Registers a schema under a name, or throws when the name is taken by another schema */
 const register = (name: string, schema: TSchema) => {
 	// the plugin registers the problem models itself, so documenting one is a reference and nothing more
 	const reserved = RESERVED[name]
 	if (reserved) {
-		if (reserved === schema) return
+		if (isSame(reserved, schema)) return
 		throw new Error(`The $id "${name}" is taken by the problem model this package registers. Give the schema another $id.`)
 	}
 
 	const existing = models.get(name)
 	if (existing) {
 		// the same schema under the same name is the normal case: one schema reused by many actions
-		if (existing.source === schema || JSON.stringify(existing.source) === JSON.stringify(schema)) return
+		if (isSame(existing.source, schema)) return
 		throw new Error(`Two different schemas carry the $id "${name}". Reference the one schema everywhere rather than cloning it, and give schemas that genuinely differ their own $id.`)
 	}
 
@@ -169,6 +172,13 @@ export const registerSchemas = (schemas: TSchema[]) => {
  */
 export const schemaModels = (): Record<string, TSchema> =>
 	Object.fromEntries([...models].map(([name, { model }]) => [name, model]))
+
+/**
+ * The problem models this package registers, carrying the pointer their references use as their `$id` like every other
+ * model, so a schema that nests `Problem` resolves wherever it is validated.
+ */
+export const problemModels = (): Record<string, TSchema> =>
+	Object.fromEntries(Object.entries(RESERVED).map(([name, schema]) => [name, Object.assign({}, schema, { $id: PREFIX + name })]))
 
 /**
  * Forgets every registered model. The registry is global and lives as long as the process, so this is only useful to
